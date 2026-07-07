@@ -1,0 +1,32 @@
+name: Refresh snapshot
+
+# Re-scan the chain weekly (and on demand) and commit lib/snapshot.json so the
+# runtime incremental scan window stays small. Pushing to main auto-deploys.
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run refresh
+      - name: Commit updated snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet lib/snapshot.json; then
+            git add lib/snapshot.json
+            git commit -m "chore: refresh operator revenue snapshot"
+            git push
+          else
+            echo "No change in snapshot."
+          fi
