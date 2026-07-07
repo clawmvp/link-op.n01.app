@@ -4,17 +4,26 @@ A dashboard mapping **revenue per Chainlink node operator**, deployed at
 **link-op.n01.app**. Public source on GitHub.
 
 ## What it shows
-Revenue = LINK credited to each operator, aggregated from on-chain
-`EarmarkSet` events emitted by the Chainlink payments contract
-`0x5680681ED3767B96914CE741a308155C7fB9171d`.
+Per-operator revenue = **earmarked + direct**, combined from two on-chain sources
+(each event tagged with a `source` of `'e'` or `'d'` in the snapshot):
 
-- Event: `EarmarkSet(address indexed operator, uint256 indexed id, int96 amount, bytes data)`
-  - `topic[1]` = operator address, `topic[2]` = id
-  - data = `(int96 amount, bytes payload)`; `payload` = `(uint year, uint week, uint timestamp)`
-  - `amount` is LINK (18 decimals). See [`lib/earmarks.ts`](lib/earmarks.ts) `decodeEarmark`.
+1. **EarmarkSet ledger** — contract `0x5680681ED3767B96914CE741a308155C7fB9171d`:
+   `EarmarkSet(address indexed operator, uint256 indexed id, int96 amount, bytes data)`
+   - `topic[1]` = operator, `topic[2]` = id; data = `(int96 amount, bytes payload)`;
+     `payload` = `(uint year, uint week, uint timestamp)`; `amount` is LINK (18 dec).
+   - See [`lib/earmarks.ts`](lib/earmarks.ts) `decodeEarmark`.
+2. **Treasury Safe** `0x77dD1A9b170E2F8976c20c10c8d9c27886181077` (a Gnosis Safe —
+   `SafeReceived` is incoming ETH, ignore). Payouts OUT = LINK `Transfer(from=Safe)`.
+   Indexed via `fetchSafeTransfers`, **scoped to addresses that appear in EarmarkSet**
+   (the tracked operators); ~500 other grant/tail recipients are intentionally excluded.
+   Its biggest outflow funds the earmark contract itself — excluded.
+
+- Only operators paid in the **last 30 days** are shown (active filter).
 - 01node = `0x7a30e4b6307c0db7aef247a656b44d888b23a2dc` (highlighted, "you" badge).
-- `0x9a709b…9ec6` is a large recipient with no per-period metadata — flagged as
-  `pool / protocol?` in [`lib/labels.ts`](lib/labels.ts), not a normal node operator.
+- Excluded infra ([`lib/labels.ts`](lib/labels.ts) `EXCLUDE`): pool `0x9a70…9ec6`
+  (4.2M LINK, no period metadata), the earmark contract, the Safe, counterparty `0x1c911…`.
+- Caveat: earmark is an accrual ledger; the Safe's direct LINK *could* partly overlap
+  it. Kept split (earmark vs direct) for transparency; summing was the explicit ask.
 
 ## Stack & deploy
 - Next.js 15 (App Router) + React 19 + Tailwind v3 + TypeScript + viem.
