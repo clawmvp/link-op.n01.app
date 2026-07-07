@@ -4,7 +4,7 @@ import {
   EARMARK_SET_TOPIC,
   LOG_WINDOW,
 } from "./config";
-import type { Earmark, Operator, Snapshot } from "./types";
+import type { Earmark, EventTuple, Operator } from "./types";
 
 type RawLog = {
   topics: string[];
@@ -76,63 +76,67 @@ export async function fetchEarmarks(
   return out;
 }
 
-// Fold a list of earmarks into per-operator aggregates, seeded by an optional
-// existing operator list (used for incremental top-ups over a snapshot).
-export function aggregate(
-  earmarks: Earmark[],
-  seed: Operator[] = [],
-): Operator[] {
-  const map = new Map<string, Operator>();
-  for (const o of seed) map.set(o.address, { ...o, totalLink: o.totalLink });
+export function earmarksToEvents(earmarks: Earmark[]): EventTuple[] {
+  return earmarks.map((e) => [e.operator, e.amount.toString(), e.ts, e.block]);
+}
 
-  for (const e of earmarks) {
-    const cur = map.get(e.operator);
+type AggregateOptions = {
+  now: number; // unix seconds — windows are relative to this
+  ens?: Record<string, string | null>;
+  exclude?: Set<string>; // addresses to drop (e.g. pool/protocol recipients)
+  activeWithinDays?: number; // drop operators with no earmark in this window
+};
+
+// Fold compact events into per-operator aggregates, computing rolling 30d/90d
+// windows relative to `now`, then applying exclusions / activity filter.
+export function aggregateEvents(
+  events: EventTuple[],
+  opts: AggregateOptions,
+): Operator[] {
+  const ens = opts.ens ?? {};
+  const c30 = opts.now - 30 * 86400;
+  const c90 = opts.now - 90 * 86400;
+  const map = new Map<string, Operator>();
+
+  for (const [op, amtS, ts, block] of events) {
+    const amt = BigInt(amtS);
+    let cur = map.get(op);
     if (!cur) {
-      map.set(e.operator, {
-        address: e.operator,
-        ens: null,
-        totalLink: e.amount.toString(),
-        earmarks: 1,
-        firstBlock: e.block,
-        lastBlock: e.block,
-        lastTs: e.ts,
-      });
-    } else {
-      cur.totalLink = (BigInt(cur.totalLink) + e.amount).toString();
-      cur.earmarks += 1;
-      cur.firstBlock = Math.min(cur.firstBlock, e.block);
-      cur.lastBlock = Math.max(cur.lastBlock, e.block);
-      cur.lastTs = Math.max(cur.lastTs, e.ts);
+      cur = {
+        address: op,
+        ens: ens[op] ?? null,
+        totalLink: "0",
+        last30: "0",
+        last90: "0",
+        earmarks: 0,
+        firstBlock: block,
+        lastBlock: block,
+        lastTs: ts,
+      };
+      map.set(op, cur);
     }
+    cur.totalLink = (BigInt(cur.totalLink) + amt).toString();
+    if (ts >= c30) cur.last30 = (BigInt(cur.last30) + amt).toString();
+    if (ts >= c90) cur.last90 = (BigInt(cur.last90) + amt).toString();
+    cur.earmarks += 1;
+    cur.firstBlock = Math.min(cur.firstBlock, block);
+    cur.lastBlock = Math.max(cur.lastBlock, block);
+    cur.lastTs = Math.max(cur.lastTs, ts);
   }
 
-  return [...map.values()].sort((a, b) =>
-    BigInt(a.totalLink) < BigInt(b.totalLink) ? 1 : -1,
-  );
+  let ops = [...map.values()];
+  if (opts.exclude) ops = ops.filter((o) => !opts.exclude!.has(o.address));
+  if (opts.activeWithinDays != null) {
+    const cut = opts.now - opts.activeWithinDays * 86400;
+    ops = ops.filter((o) => o.lastTs >= cut);
+  }
+  ops.sort((a, b) => (BigInt(a.totalLink) < BigInt(b.totalLink) ? 1 : -1));
+  return ops;
 }
 
-export function grandTotal(operators: Operator[]): string {
-  return operators
-    .reduce((acc, o) => acc + BigInt(o.totalLink), 0n)
-    .toString();
-}
-
-export function toSnapshot(
+export function sumField(
   operators: Operator[],
-  meta: {
-    fromBlock: number;
-    latestBlock: number;
-    linkUsd: number | null;
-    generatedAt: number;
-  },
-): Snapshot {
-  return {
-    generatedAt: meta.generatedAt,
-    fromBlock: meta.fromBlock,
-    latestBlock: meta.latestBlock,
-    totalEvents: operators.reduce((n, o) => n + o.earmarks, 0),
-    totalLink: grandTotal(operators),
-    linkUsd: meta.linkUsd,
-    operators,
-  };
+  field: "totalLink" | "last30" | "last90",
+): string {
+  return operators.reduce((acc, o) => acc + BigInt(o[field]), 0n).toString();
 }

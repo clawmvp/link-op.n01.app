@@ -1,16 +1,22 @@
 // Regenerate lib/snapshot.json from on-chain data.
 //   npm run refresh
-// Full-scans EarmarkSet events from DEPLOY_BLOCK to head, aggregates per
-// operator, reverse-resolves ENS names, fetches LINK/USD, and writes the
-// committed snapshot the site renders from.
+// Full-scans EarmarkSet events from DEPLOY_BLOCK to head, reverse-resolves ENS,
+// fetches LINK/USD, and writes the committed snapshot (raw events + ENS map).
+// Rolling 30d/90d windows and the active/excluded filtering are computed at
+// request time, so they stay accurate between refreshes.
 
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEPLOY_BLOCK } from "../lib/config";
 import { blockNumber } from "../lib/rpc";
-import { fetchEarmarks, aggregate, toSnapshot } from "../lib/earmarks";
+import {
+  fetchEarmarks,
+  earmarksToEvents,
+  aggregateEvents,
+} from "../lib/earmarks";
 import { resolveEns } from "../lib/ens";
 import { linkUsd } from "../lib/price";
+import type { Snapshot } from "../lib/types";
 
 async function main() {
   const latest = await blockNumber();
@@ -19,29 +25,35 @@ async function main() {
   const earmarks = await fetchEarmarks(DEPLOY_BLOCK, latest);
   console.log(`Decoded ${earmarks.length} earmarks.`);
 
-  let ops = aggregate(earmarks);
-  console.log(`${ops.length} operators. Resolving ENS …`);
-
-  const names = await resolveEns(ops.map((o) => o.address));
-  ops = ops.map((o) => ({ ...o, ens: names[o.address] ?? null }));
-  const withEns = ops.filter((o) => o.ens).length;
-  console.log(`Resolved ${withEns} ENS names.`);
+  const addresses = [...new Set(earmarks.map((e) => e.operator))];
+  console.log(`${addresses.length} operators. Resolving ENS …`);
+  const ens = await resolveEns(addresses);
+  console.log(`Resolved ${Object.values(ens).filter(Boolean).length} ENS names.`);
 
   const price = await linkUsd();
   console.log(`LINK/USD: ${price ?? "unavailable"}`);
 
-  const snap = toSnapshot(ops, {
+  const snap: Snapshot = {
+    generatedAt: Math.floor(Date.now() / 1000),
     fromBlock: DEPLOY_BLOCK,
     latestBlock: latest,
     linkUsd: price,
-    generatedAt: Math.floor(Date.now() / 1000),
-  });
+    ens,
+    events: earmarksToEvents(earmarks),
+  };
 
   const out = join(process.cwd(), "lib", "snapshot.json");
-  writeFileSync(out, JSON.stringify(snap, null, 2));
+  writeFileSync(out, JSON.stringify(snap));
+
+  // Quick sanity print (active operators, excluding pool/protocol).
+  const active = aggregateEvents(snap.events, {
+    now: snap.generatedAt,
+    ens,
+    activeWithinDays: 30,
+  });
   console.log(
-    `Wrote ${out}: ${snap.operators.length} operators, ${snap.totalEvents} events, ` +
-      `${(Number(BigInt(snap.totalLink) / 10n ** 15n) / 1e3).toLocaleString()} LINK total.`,
+    `Wrote ${out}: ${snap.events.length} events, ${addresses.length} operators ` +
+      `(${active.length} active in last 30d).`,
   );
 }
 

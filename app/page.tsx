@@ -1,6 +1,5 @@
 import { getData } from "@/lib/data";
 import { fmtLink, fmtUsd } from "@/lib/format";
-import { displayName } from "@/lib/labels";
 import { PAYMENTS_CONTRACT, SELF_OPERATOR } from "@/lib/config";
 import OperatorsTable from "@/components/OperatorsTable";
 
@@ -28,14 +27,17 @@ function Stat({
 
 export default async function Home() {
   const data = await getData();
-  const { operators, linkUsd, totalLink, totalEvents } = data;
+  const { operators, linkUsd, totalLink, total30 } = data;
 
   const selfIdx = operators.findIndex(
     (o) => o.address.toLowerCase() === SELF_OPERATOR,
   );
   const self = selfIdx >= 0 ? operators[selfIdx] : null;
 
-  const updated = new Date(data.generatedAt * 1000).toISOString().slice(0, 16).replace("T", " ");
+  const updated = new Date(data.generatedAt * 1000)
+    .toISOString()
+    .slice(0, 16)
+    .replace("T", " ");
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10 sm:py-14">
@@ -63,22 +65,30 @@ export default async function Home() {
           >
             {PAYMENTS_CONTRACT.slice(0, 8)}…{PAYMENTS_CONTRACT.slice(-6)}
           </a>
-          . Each earmark records the LINK credited to an operator for a period.
+          . Active operators only (earmarked in the last 30 days).
         </p>
       </header>
 
       <section className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat
-          label="Total distributed"
-          value={`${fmtLink(totalLink, 0)}`}
+          label="Total (active)"
+          value={fmtLink(totalLink, 0)}
           sub={`LINK · ${fmtUsd(totalLink, linkUsd) ?? "—"}`}
         />
-        <Stat label="Operators" value={String(operators.length)} sub="unique addresses" />
-        <Stat label="Earmarks" value={totalEvents.toLocaleString()} sub="events indexed" />
+        <Stat
+          label="Last 30 days"
+          value={fmtLink(total30, 0)}
+          sub={`LINK · ${fmtUsd(total30, linkUsd) ?? "—"}`}
+        />
+        <Stat
+          label="Active operators"
+          value={String(operators.length)}
+          sub="earmarked ≤ 30d"
+        />
         {self ? (
           <Stat
             label="01node"
-            value={`${fmtLink(self.totalLink, 0)}`}
+            value={fmtLink(self.totalLink, 0)}
             sub={`LINK · rank #${selfIdx + 1}`}
           />
         ) : (
@@ -88,7 +98,7 @@ export default async function Home() {
 
       <OperatorsTable operators={operators} linkUsd={linkUsd} />
 
-      <footer className="mt-10 flex flex-col gap-2 border-t border-ink-800 pt-6 text-xs text-ink-600 sm:flex-row sm:items-center sm:justify-between">
+      <footer className="mt-10 flex flex-col gap-2 border-t border-ink-800 pt-6 text-xs text-ink-500 sm:flex-row sm:items-center sm:justify-between">
         <div>
           Data range: block {data.fromBlock.toLocaleString()} →{" "}
           {data.latestBlock.toLocaleString()} · updated {updated} UTC

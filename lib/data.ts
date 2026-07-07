@@ -1,55 +1,85 @@
 import { unstable_cache } from "next/cache";
-import snapshot from "./snapshot.json";
+import snapshotJson from "./snapshot.json";
 import type { Operator, Snapshot } from "./types";
 import { blockNumber } from "./rpc";
-import { fetchEarmarks, aggregate, toSnapshot } from "./earmarks";
+import {
+  fetchEarmarks,
+  earmarksToEvents,
+  aggregateEvents,
+  sumField,
+} from "./earmarks";
 import { resolveEns } from "./ens";
 import { linkUsd } from "./price";
+import { EXCLUDE } from "./labels";
 
-const BASE = snapshot as Snapshot;
+const BASE = snapshotJson as unknown as Snapshot;
 
-// Load the dashboard data. The committed snapshot is always the baseline; at
-// runtime we (a) refresh the LINK price and (b) incrementally scan only the
-// blocks mined since the snapshot, so the page stays fresh without ever
-// scanning the full history on a request. Any failure falls back to the
-// snapshot as-is. Cached for 30 min.
-async function loadData(): Promise<Snapshot> {
+// Drop operators with no earmark in this many days.
+const ACTIVE_DAYS = 30;
+
+export type DashboardData = {
+  generatedAt: number;
+  fromBlock: number;
+  latestBlock: number;
+  linkUsd: number | null;
+  operators: Operator[]; // active only, pool/protocol excluded, sorted by total
+  totalLink: string;
+  total30: string;
+  total90: string;
+  totalEvents: number;
+};
+
+// The committed snapshot is the baseline; at runtime we (a) refresh the LINK
+// price and (b) incrementally scan only the blocks mined since the snapshot,
+// then aggregate with 30d/90d windows relative to now. Any failure falls back
+// to the snapshot data. Cached for 30 min.
+async function loadData(): Promise<DashboardData> {
   const price = (await linkUsd()) ?? BASE.linkUsd;
 
+  let events = BASE.events;
+  const ens: Record<string, string | null> = { ...BASE.ens };
+  let latest = BASE.latestBlock;
+
   try {
-    const latest = await blockNumber();
-    if (latest <= BASE.latestBlock) {
-      return { ...BASE, linkUsd: price };
+    const head = await blockNumber();
+    if (head > BASE.latestBlock) {
+      const fresh = await fetchEarmarks(BASE.latestBlock + 1, head);
+      if (fresh.length) {
+        events = events.concat(earmarksToEvents(fresh));
+        const known = new Set(Object.keys(ens));
+        const brandNew = [...new Set(fresh.map((e) => e.operator))].filter(
+          (a) => !known.has(a),
+        );
+        if (brandNew.length) Object.assign(ens, await resolveEns(brandNew));
+      }
+      latest = head;
     }
-
-    const fresh = await fetchEarmarks(BASE.latestBlock + 1, latest);
-    if (fresh.length === 0) {
-      return { ...BASE, latestBlock: latest, linkUsd: price };
-    }
-
-    let ops = aggregate(fresh, BASE.operators);
-
-    // Resolve ENS for any operators that appeared for the first time.
-    const missing = ops.filter((o) => o.ens === undefined || o.ens === null);
-    const known = new Set(BASE.operators.map((o) => o.address));
-    const brandNew = missing.filter((o) => !known.has(o.address)).map((o) => o.address);
-    if (brandNew.length) {
-      const names = await resolveEns(brandNew);
-      ops = ops.map((o) => (o.address in names ? { ...o, ens: names[o.address] } : o));
-    }
-
-    return toSnapshot(ops, {
-      fromBlock: BASE.fromBlock,
-      latestBlock: latest,
-      linkUsd: price,
-      generatedAt: Math.floor(Date.now() / 1000),
-    });
   } catch {
-    return { ...BASE, linkUsd: price };
+    /* keep snapshot events */
   }
+
+  const now = Math.floor(Date.now() / 1000);
+  const operators = aggregateEvents(events, {
+    now,
+    ens,
+    exclude: EXCLUDE,
+    activeWithinDays: ACTIVE_DAYS,
+  });
+
+  return {
+    generatedAt: now,
+    fromBlock: BASE.fromBlock,
+    latestBlock: latest,
+    linkUsd: price,
+    operators,
+    totalLink: sumField(operators, "totalLink"),
+    total30: sumField(operators, "last30"),
+    total90: sumField(operators, "last90"),
+    totalEvents: operators.reduce((n, o) => n + o.earmarks, 0),
+  };
 }
 
-export const getData = unstable_cache(loadData, ["earmark-data-v1"], {
+export const getData = unstable_cache(loadData, ["earmark-data-v2"], {
   revalidate: 1800,
 });
 
