@@ -12,9 +12,20 @@ export const EARMARK_SET_TOPIC =
 // lower bound so we never scan the whole chain.
 export const DEPLOY_BLOCK = 23_540_000;
 
-// LINK token (mainnet) — used for the price feed lookup / display.
+// LINK token (mainnet). Its Transfer event carries the direct treasury payouts.
 export const LINK_TOKEN =
   "0x514910771AF9Ca656af840dff83E8264EcF986CA".toLowerCase() as `0x${string}`;
+export const LINK_TRANSFER_TOPIC =
+  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+// Treasury / paymaster Safe that also pays operators directly in LINK (a second
+// revenue source, on top of the EarmarkSet ledger). It funds the earmark
+// contract too — those transfers are ignored (recipient isn't an operator).
+export const SAFE_CONTRACT =
+  "0x77dD1A9b170E2F8976c20c10c8d9c27886181077".toLowerCase() as `0x${string}`;
+
+// First block the Safe started paying out (found by scanning).
+export const SAFE_DEPLOY_BLOCK = 22_480_000;
 
 // Our own operator, highlighted in the table.
 export const SELF_OPERATOR =

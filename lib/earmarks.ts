@@ -3,6 +3,9 @@ import {
   PAYMENTS_CONTRACT,
   EARMARK_SET_TOPIC,
   LOG_WINDOW,
+  LINK_TOKEN,
+  LINK_TRANSFER_TOPIC,
+  SAFE_CONTRACT,
 } from "./config";
 import type { Earmark, EventTuple, Operator } from "./types";
 
@@ -10,7 +13,10 @@ type RawLog = {
   topics: string[];
   data: string;
   blockNumber: string;
+  blockTimestamp?: string;
 };
+
+const pad32 = (addr: string) => "0x" + addr.toLowerCase().replace(/^0x/, "").padStart(64, "0");
 
 // Decode one EarmarkSet log.
 // Non-indexed data = (int96 amount, bytes data); the bytes payload encodes
@@ -77,7 +83,73 @@ export async function fetchEarmarks(
 }
 
 export function earmarksToEvents(earmarks: Earmark[]): EventTuple[] {
-  return earmarks.map((e) => [e.operator, e.amount.toString(), e.ts, e.block]);
+  return earmarks.map((e) => [e.operator, e.amount.toString(), e.ts, e.block, "e"]);
+}
+
+// Fetch block timestamps for a set of block numbers (deduped), with limited
+// concurrency. Used to date direct LINK transfers when the RPC doesn't return
+// blockTimestamp on the logs.
+async function blockTimestamps(
+  blocks: number[],
+  concurrency = 8,
+): Promise<Map<number, number>> {
+  const uniq = [...new Set(blocks)];
+  const out = new Map<number, number>();
+  for (let i = 0; i < uniq.length; i += concurrency) {
+    const batch = uniq.slice(i, i + concurrency);
+    const res = await Promise.all(
+      batch.map((b) =>
+        rpc<{ timestamp: string } | null>("eth_getBlockByNumber", [
+          "0x" + b.toString(16),
+          false,
+        ]).catch(() => null),
+      ),
+    );
+    batch.forEach((b, j) => {
+      const ts = res[j]?.timestamp;
+      if (ts) out.set(b, parseInt(ts, 16));
+    });
+  }
+  return out;
+}
+
+// Fetch direct LINK transfers OUT of the treasury Safe in [fromBlock, toBlock],
+// keeping only those whose recipient is in `allowed` (the tracked operators).
+// Returns compact events tagged as source 'd'.
+export async function fetchSafeTransfers(
+  fromBlock: number,
+  toBlock: number,
+  allowed: Set<string>,
+): Promise<EventTuple[]> {
+  const raw: { to: string; amount: string; block: number; ts: number }[] = [];
+  const needTs: number[] = [];
+
+  for (let b = fromBlock; b <= toBlock; b += LOG_WINDOW) {
+    const to = Math.min(b + LOG_WINDOW - 1, toBlock);
+    const logs = await rpc<RawLog[]>("eth_getLogs", [
+      {
+        fromBlock: "0x" + b.toString(16),
+        toBlock: "0x" + to.toString(16),
+        address: LINK_TOKEN,
+        topics: [LINK_TRANSFER_TOPIC, pad32(SAFE_CONTRACT)],
+      },
+    ]);
+    for (const l of logs) {
+      const recipient = ("0x" + l.topics[2].slice(-40)).toLowerCase();
+      if (!allowed.has(recipient)) continue;
+      const block = parseInt(l.blockNumber, 16);
+      const ts = l.blockTimestamp ? parseInt(l.blockTimestamp, 16) : 0;
+      if (!ts) needTs.push(block);
+      raw.push({ to: recipient, amount: BigInt(l.data).toString(), block, ts });
+    }
+  }
+
+  if (needTs.length) {
+    const tsMap = await blockTimestamps(needTs);
+    for (const r of raw) if (!r.ts) r.ts = tsMap.get(r.block) ?? 0;
+  }
+
+  return raw.map((r) => [r.to, r.amount, r.ts, r.block, "d"]);
 }
 
 type AggregateOptions = {
@@ -98,7 +170,7 @@ export function aggregateEvents(
   const c90 = opts.now - 90 * 86400;
   const map = new Map<string, Operator>();
 
-  for (const [op, amtS, ts, block] of events) {
+  for (const [op, amtS, ts, block, source] of events) {
     const amt = BigInt(amtS);
     let cur = map.get(op);
     if (!cur) {
@@ -106,6 +178,8 @@ export function aggregateEvents(
         address: op,
         ens: ens[op] ?? null,
         totalLink: "0",
+        earmarked: "0",
+        direct: "0",
         last30: "0",
         last90: "0",
         earmarks: 0,
@@ -116,6 +190,8 @@ export function aggregateEvents(
       map.set(op, cur);
     }
     cur.totalLink = (BigInt(cur.totalLink) + amt).toString();
+    if (source === "d") cur.direct = (BigInt(cur.direct) + amt).toString();
+    else cur.earmarked = (BigInt(cur.earmarked) + amt).toString();
     if (ts >= c30) cur.last30 = (BigInt(cur.last30) + amt).toString();
     if (ts >= c90) cur.last90 = (BigInt(cur.last90) + amt).toString();
     cur.earmarks += 1;
@@ -136,7 +212,15 @@ export function aggregateEvents(
 
 export function sumField(
   operators: Operator[],
-  field: "totalLink" | "last30" | "last90",
+  field: "totalLink" | "earmarked" | "direct" | "last30" | "last90",
 ): string {
   return operators.reduce((acc, o) => acc + BigInt(o[field]), 0n).toString();
+}
+
+// The set of addresses that received at least one EarmarkSet accrual — i.e. the
+// tracked node operators. Used to scope direct treasury transfers.
+export function earmarkOperatorSet(events: EventTuple[]): Set<string> {
+  const s = new Set<string>();
+  for (const [op, , , , source] of events) if (source === "e") s.add(op);
+  return s;
 }

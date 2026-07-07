@@ -1,17 +1,24 @@
+// Revenue source of an event: 'e' = EarmarkSet accrual, 'd' = direct LINK
+// transfer from the treasury Safe.
+export type Source = "e" | "d";
+
 export type Operator = {
   address: string;
   ens: string | null;
-  totalLink: string; // all-time, wei (18 decimals) as decimal string
-  last30: string; // revenue in the last 30 days, wei
-  last90: string; // revenue in the last 90 days, wei
-  earmarks: number; // number of EarmarkSet events
+  totalLink: string; // all-time combined, wei (18 decimals) as decimal string
+  earmarked: string; // portion from EarmarkSet, wei
+  direct: string; // portion from direct treasury LINK transfers, wei
+  last30: string; // combined revenue in the last 30 days, wei
+  last90: string; // combined revenue in the last 90 days, wei
+  earmarks: number; // number of revenue events (both sources)
   firstBlock: number;
   lastBlock: number;
-  lastTs: number; // unix seconds of the most recent earmark
+  lastTs: number; // unix seconds of the most recent event
 };
 
-// Compact event row stored in the snapshot: [operator, amountWei, ts, block].
-export type EventTuple = [string, string, number, number];
+// Compact event row stored in the snapshot:
+// [operator, amountWei, ts, block, source].
+export type EventTuple = [string, string, number, number, Source];
 
 export type Snapshot = {
   generatedAt: number; // unix seconds

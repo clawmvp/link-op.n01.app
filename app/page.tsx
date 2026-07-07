@@ -1,6 +1,6 @@
 import { getData } from "@/lib/data";
 import { fmtLink, fmtUsd } from "@/lib/format";
-import { PAYMENTS_CONTRACT, SELF_OPERATOR } from "@/lib/config";
+import { PAYMENTS_CONTRACT, SAFE_CONTRACT, SELF_OPERATOR } from "@/lib/config";
 import OperatorsTable from "@/components/OperatorsTable";
 
 export const revalidate = 1800;
@@ -27,7 +27,7 @@ function Stat({
 
 export default async function Home() {
   const data = await getData();
-  const { operators, linkUsd, totalLink, total30 } = data;
+  const { operators, linkUsd, totalLink, totalDirect } = data;
 
   const selfIdx = operators.findIndex(
     (o) => o.address.toLowerCase() === SELF_OPERATOR,
@@ -52,11 +52,11 @@ export default async function Home() {
           Revenue per Chainlink operator
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-400">
-          Mapped from on-chain{" "}
+          Combines two on-chain sources: the{" "}
           <code className="rounded bg-ink-850 px-1.5 py-0.5 text-xs text-ink-200">
             EarmarkSet
           </code>{" "}
-          events emitted by the payments contract{" "}
+          reward ledger from{" "}
           <a
             href={`https://etherscan.io/address/${PAYMENTS_CONTRACT}`}
             target="_blank"
@@ -64,8 +64,17 @@ export default async function Home() {
             className="font-mono text-link-light hover:underline"
           >
             {PAYMENTS_CONTRACT.slice(0, 8)}…{PAYMENTS_CONTRACT.slice(-6)}
+          </a>{" "}
+          plus direct LINK payouts from the treasury Safe{" "}
+          <a
+            href={`https://etherscan.io/address/${SAFE_CONTRACT}`}
+            target="_blank"
+            rel="noreferrer"
+            className="font-mono text-link-light hover:underline"
+          >
+            {SAFE_CONTRACT.slice(0, 8)}…{SAFE_CONTRACT.slice(-6)}
           </a>
-          . Active operators only (earmarked in the last 30 days).
+          . Active operators only (paid in the last 30 days).
         </p>
       </header>
 
@@ -76,14 +85,14 @@ export default async function Home() {
           sub={`LINK · ${fmtUsd(totalLink, linkUsd) ?? "—"}`}
         />
         <Stat
-          label="Last 30 days"
-          value={fmtLink(total30, 0)}
-          sub={`LINK · ${fmtUsd(total30, linkUsd) ?? "—"}`}
+          label="Direct payouts"
+          value={fmtLink(totalDirect, 0)}
+          sub={`LINK · from treasury Safe`}
         />
         <Stat
           label="Active operators"
           value={String(operators.length)}
-          sub="earmarked ≤ 30d"
+          sub="paid ≤ 30d"
         />
         {self ? (
           <Stat

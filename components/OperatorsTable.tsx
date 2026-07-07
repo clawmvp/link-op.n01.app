@@ -127,11 +127,11 @@ export default function OperatorsTable({
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums font-medium text-ink-100">
                     {fmtLink(o.totalLink)}
-                    {usd ? (
-                      <span className="block text-[11px] font-normal text-ink-500">
-                        {usd}
-                      </span>
-                    ) : null}
+                    <span className="block text-[11px] font-normal text-ink-500">
+                      {usd ? usd + " · " : ""}
+                      {fmtLink(o.earmarked, 0)} earmark
+                      {BigInt(o.direct) > 0n ? ` + ${fmtLink(o.direct, 0)} direct` : ""}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-ink-300">
                     {fmtLink(o.last30)}

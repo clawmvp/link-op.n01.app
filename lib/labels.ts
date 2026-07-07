@@ -11,6 +11,10 @@ export const EXCLUDE = new Set<string>([
   // Large recipient (~4.2M LINK) whose earmarks carry no per-period metadata —
   // a protocol-level / pooled recipient, not a single node operator.
   "0x9a709b7b69ea42d5eeb1cebc48674c69e1569ec6",
+  // Infrastructure addresses, in case they ever appear as recipients:
+  "0x5680681ed3767b96914ce741a308155c7fb9171d", // the earmark payments contract
+  "0x77dd1a9b170e2f8976c20c10c8d9c27886181077", // the treasury Safe itself
+  "0x1c911eec9b3016716c5e708b02d3b4f679807954", // treasury counterparty / router
 ]);
 
 export function displayName(

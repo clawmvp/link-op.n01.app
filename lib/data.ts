@@ -4,7 +4,9 @@ import type { Operator, Snapshot } from "./types";
 import { blockNumber } from "./rpc";
 import {
   fetchEarmarks,
+  fetchSafeTransfers,
   earmarksToEvents,
+  earmarkOperatorSet,
   aggregateEvents,
   sumField,
 } from "./earmarks";
@@ -24,6 +26,8 @@ export type DashboardData = {
   linkUsd: number | null;
   operators: Operator[]; // active only, pool/protocol excluded, sorted by total
   totalLink: string;
+  totalEarmarked: string;
+  totalDirect: string;
   total30: string;
   total90: string;
   totalEvents: number;
@@ -52,6 +56,10 @@ async function loadData(): Promise<DashboardData> {
         );
         if (brandNew.length) Object.assign(ens, await resolveEns(brandNew));
       }
+      // Direct treasury payouts to tracked operators since the snapshot.
+      const operatorSet = earmarkOperatorSet(events);
+      const safe = await fetchSafeTransfers(BASE.latestBlock + 1, head, operatorSet);
+      if (safe.length) events = events.concat(safe);
       latest = head;
     }
   } catch {
@@ -73,13 +81,15 @@ async function loadData(): Promise<DashboardData> {
     linkUsd: price,
     operators,
     totalLink: sumField(operators, "totalLink"),
+    totalEarmarked: sumField(operators, "earmarked"),
+    totalDirect: sumField(operators, "direct"),
     total30: sumField(operators, "last30"),
     total90: sumField(operators, "last90"),
     totalEvents: operators.reduce((n, o) => n + o.earmarks, 0),
   };
 }
 
-export const getData = unstable_cache(loadData, ["earmark-data-v2"], {
+export const getData = unstable_cache(loadData, ["earmark-data-v3"], {
   revalidate: 1800,
 });
 
