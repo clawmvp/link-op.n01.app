@@ -3,6 +3,7 @@ import { fmtLink, fmtUsd } from "@/lib/format";
 import { PAYMENTS_CONTRACT, SAFE_CONTRACT, SELF_OPERATOR } from "@/lib/config";
 import OperatorsTable from "@/components/OperatorsTable";
 import RevenueChart from "@/components/RevenueChart";
+import { networkStats } from "@/lib/stats";
 
 export const revalidate = 1800;
 
@@ -35,6 +36,8 @@ export default async function Home() {
     (o) => o.address.toLowerCase() === SELF_OPERATOR,
   );
   const self = selfIdx >= 0 ? operators[selfIdx] : null;
+
+  const net = networkStats(operators, monthlyTotals, totalLink, data.generatedAt);
 
   const updated = new Date(data.generatedAt * 1000)
     .toISOString()
@@ -110,11 +113,44 @@ export default async function Home() {
         )}
       </section>
 
-      <section className="mb-8">
+      <section className="mb-4">
         <RevenueChart months={monthlyTotals} linkUsd={linkUsd} />
       </section>
 
-      <OperatorsTable operators={operators} monthly={monthly} linkUsd={linkUsd} />
+      <section className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat
+          label="Avg / operator"
+          value={fmtLink(net.avgTotalWei, 0)}
+          sub={`LINK · median ${fmtLink(net.medianTotalWei, 0)}`}
+        />
+        <Stat
+          label="Avg 30d / operator"
+          value={fmtLink(net.avg30Wei, 0)}
+          sub="LINK · last 30 days"
+        />
+        <Stat
+          label="Top 5 concentration"
+          value={`${net.top5Pct.toFixed(1)}%`}
+          sub="of total revenue"
+        />
+        <Stat
+          label="Network MoM"
+          value={
+            net.momPct == null
+              ? "—"
+              : `${net.momPct >= 0 ? "+" : ""}${net.momPct.toFixed(1)}%`
+          }
+          sub="last full month"
+        />
+      </section>
+
+      <OperatorsTable
+        operators={operators}
+        monthly={monthly}
+        linkUsd={linkUsd}
+        totalLink={totalLink}
+        generatedAt={data.generatedAt}
+      />
 
       <footer className="mt-10 flex flex-col gap-2 border-t border-ink-800 pt-6 text-xs text-ink-500 sm:flex-row sm:items-center sm:justify-between">
         <div>

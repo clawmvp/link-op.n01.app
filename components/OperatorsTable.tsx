@@ -7,6 +7,7 @@ import { fmtLink, fmtUsd, timeAgo } from "@/lib/format";
 import { displayName } from "@/lib/labels";
 import { SELF_OPERATOR } from "@/lib/config";
 import OperatorDetail from "./OperatorDetail";
+import Sparkline from "./Sparkline";
 
 type SortKey = "totalLink" | "last30" | "last90";
 
@@ -20,10 +21,14 @@ export default function OperatorsTable({
   operators,
   monthly,
   linkUsd,
+  totalLink,
+  generatedAt,
 }: {
   operators: Operator[];
   monthly: MonthlyByOperator;
   linkUsd: number | null;
+  totalLink: string;
+  generatedAt: number;
 }) {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("totalLink");
@@ -81,7 +86,7 @@ export default function OperatorsTable({
       </div>
 
       <div className="scroll-x overflow-x-auto rounded-xl border border-ink-800 bg-ink-900/60">
-        <table className="w-full min-w-[720px] text-left text-sm">
+        <table className="w-full min-w-[860px] text-left text-sm">
           <thead>
             <tr className="border-b border-ink-800 text-xs uppercase tracking-wider text-ink-500">
               <th className="px-4 py-3 font-medium">#</th>
@@ -89,6 +94,7 @@ export default function OperatorsTable({
               <th className={colClass("totalLink")}>Total (LINK)</th>
               <th className={colClass("last30")}>Last 30d</th>
               <th className={colClass("last90")}>Last 90d</th>
+              <th className="px-4 py-3 text-center font-medium">14-mo trend</th>
               <th className="px-4 py-3 text-right font-medium">Last active</th>
             </tr>
           </thead>
@@ -147,6 +153,9 @@ export default function OperatorsTable({
                   <td className="px-4 py-3 text-right tabular-nums text-ink-300">
                     {fmtLink(o.last90)}
                   </td>
+                  <td className="px-4 py-3 text-center">
+                    <Sparkline months={monthly[o.address] ?? []} />
+                  </td>
                   <td className="px-4 py-3 text-right tabular-nums text-ink-500">
                     <span className="inline-flex items-center gap-2">
                       {timeAgo(o.lastTs)}
@@ -167,6 +176,8 @@ export default function OperatorsTable({
           operator={selected}
           months={monthly[selected.address] ?? []}
           linkUsd={linkUsd}
+          networkTotal={totalLink}
+          nowTs={generatedAt}
           onClose={() => setSelected(null)}
         />
       )}

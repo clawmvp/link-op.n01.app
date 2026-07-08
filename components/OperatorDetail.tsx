@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import type { Operator } from "@/lib/types";
 import type { MonthPoint } from "@/lib/monthly";
 import { fmtLink, fmtUsd, linkFromWei, timeAgo } from "@/lib/format";
 import { displayName } from "@/lib/labels";
 import { SELF_OPERATOR } from "@/lib/config";
+import { operatorStats } from "@/lib/stats";
 
 // Short month label, e.g. "Jun '26", from a "YYYY-MM" key.
 function monthLabel(ym: string): string {
@@ -129,15 +130,53 @@ function MonthlyChart({
   );
 }
 
+// A labelled statistic line used in the derived-stats grid.
+function StatLine({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-ink-500">
+        {label}
+      </div>
+      <div className="mt-0.5 text-sm font-semibold tabular-nums text-ink-100">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+// A signed percentage with a colour cue (green up / red down / grey flat).
+function Delta({ pct }: { pct: number | null }) {
+  if (pct == null) return <span className="text-ink-500">—</span>;
+  const up = pct > 0.5;
+  const down = pct < -0.5;
+  const cls = up ? "text-emerald-400" : down ? "text-rose-400" : "text-ink-400";
+  const arrow = up ? "▲" : down ? "▼" : "→";
+  return (
+    <span className={cls}>
+      {arrow} {Math.abs(pct).toFixed(pct >= 100 ? 0 : 1)}%
+    </span>
+  );
+}
+
 export default function OperatorDetail({
   operator,
   months,
   linkUsd,
+  networkTotal,
+  nowTs,
   onClose,
 }: {
   operator: Operator;
   months: MonthPoint[];
   linkUsd: number | null;
+  networkTotal: string;
+  nowTs: number;
   onClose: () => void;
 }) {
   // Close on Escape, and lock body scroll while open.
@@ -156,11 +195,11 @@ export default function OperatorDetail({
   const { primary, secondary, isEns } = displayName(operator.address, operator.ens);
   const hasDirect = BigInt(operator.direct) > 0n;
 
-  // Best month by total revenue.
-  const best = months.reduce<MonthPoint | null>(
-    (b, m) => (!b || linkFromWei(m.total) > linkFromWei(b.total) ? m : b),
-    null,
-  );
+  const stats = operatorStats(operator, months, networkTotal, nowTs);
+  const best = stats.peak;
+
+  const fmtAvg = (n: number) =>
+    n.toLocaleString("en-US", { maximumFractionDigits: 0 });
 
   return (
     <div
@@ -235,6 +274,28 @@ export default function OperatorDetail({
               <div className="text-[11px] text-ink-500">{s.sub}</div>
             </div>
           ))}
+        </div>
+
+        {/* Derived statistics */}
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-6 pt-4 sm:grid-cols-3">
+          <StatLine
+            label="Share of network"
+            value={`${stats.sharePct.toFixed(stats.sharePct >= 10 ? 1 : 2)}%`}
+          />
+          <StatLine
+            label="Avg / active month"
+            value={`${fmtAvg(stats.avgPerMonthLink)} LINK`}
+          />
+          <StatLine label="Months active" value={String(stats.monthsActive)} />
+          <StatLine label="MoM (last month)" value={<Delta pct={stats.momPct} />} />
+          <StatLine
+            label="Momentum (3mo)"
+            value={<Delta pct={stats.momentumPct} />}
+          />
+          <StatLine
+            label="Direct share"
+            value={`${stats.directPct.toFixed(0)}%`}
+          />
         </div>
 
         {/* Source split + best month */}
