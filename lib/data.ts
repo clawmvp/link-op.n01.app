@@ -13,6 +13,7 @@ import {
 import { resolveEns } from "./ens";
 import { linkUsd } from "./price";
 import { EXCLUDE } from "./labels";
+import { monthlyByOperator, type MonthlyByOperator } from "./monthly";
 
 const BASE = snapshotJson as unknown as Snapshot;
 
@@ -25,6 +26,7 @@ export type DashboardData = {
   latestBlock: number;
   linkUsd: number | null;
   operators: Operator[]; // active only, pool/protocol excluded, sorted by total
+  monthly: MonthlyByOperator; // per-operator month-by-month revenue (active ops)
   totalLink: string;
   totalEarmarked: string;
   totalDirect: string;
@@ -74,12 +76,17 @@ async function loadData(): Promise<DashboardData> {
     activeWithinDays: ACTIVE_DAYS,
   });
 
+  // Month-by-month series, scoped to the active operators the table renders.
+  const activeSet = new Set(operators.map((o) => o.address));
+  const monthly = monthlyByOperator(events, activeSet);
+
   return {
     generatedAt: now,
     fromBlock: BASE.fromBlock,
     latestBlock: latest,
     linkUsd: price,
     operators,
+    monthly,
     totalLink: sumField(operators, "totalLink"),
     totalEarmarked: sumField(operators, "earmarked"),
     totalDirect: sumField(operators, "direct"),

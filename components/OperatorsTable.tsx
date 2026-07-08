@@ -2,9 +2,11 @@
 
 import { useMemo, useState } from "react";
 import type { Operator } from "@/lib/types";
+import type { MonthlyByOperator } from "@/lib/monthly";
 import { fmtLink, fmtUsd, timeAgo } from "@/lib/format";
 import { displayName } from "@/lib/labels";
 import { SELF_OPERATOR } from "@/lib/config";
+import OperatorDetail from "./OperatorDetail";
 
 type SortKey = "totalLink" | "last30" | "last90";
 
@@ -16,13 +18,16 @@ const SORTS: [SortKey, string][] = [
 
 export default function OperatorsTable({
   operators,
+  monthly,
   linkUsd,
 }: {
   operators: Operator[];
+  monthly: MonthlyByOperator;
   linkUsd: number | null;
 }) {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("totalLink");
+  const [selected, setSelected] = useState<Operator | null>(null);
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -95,7 +100,9 @@ export default function OperatorsTable({
               return (
                 <tr
                   key={o.address}
-                  className={`border-b border-ink-800/60 transition hover:bg-ink-800/40 ${
+                  onClick={() => setSelected(o)}
+                  title="Click for month-by-month detail"
+                  className={`group cursor-pointer border-b border-ink-800/60 transition hover:bg-ink-800/40 ${
                     isSelf ? "bg-link/10" : ""
                   }`}
                 >
@@ -106,6 +113,7 @@ export default function OperatorsTable({
                         href={`https://etherscan.io/address/${o.address}`}
                         target="_blank"
                         rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
                         className={`font-medium hover:underline ${
                           isEns ? "text-link-light" : "text-ink-100"
                         }`}
@@ -140,7 +148,12 @@ export default function OperatorsTable({
                     {fmtLink(o.last90)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-ink-500">
-                    {timeAgo(o.lastTs)}
+                    <span className="inline-flex items-center gap-2">
+                      {timeAgo(o.lastTs)}
+                      <span className="text-ink-600 transition group-hover:text-ink-300">
+                        ›
+                      </span>
+                    </span>
                   </td>
                 </tr>
               );
@@ -148,6 +161,15 @@ export default function OperatorsTable({
           </tbody>
         </table>
       </div>
+
+      {selected && (
+        <OperatorDetail
+          operator={selected}
+          months={monthly[selected.address] ?? []}
+          linkUsd={linkUsd}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   );
 }

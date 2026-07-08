@@ -29,7 +29,16 @@ Per-operator revenue = **earmarked + direct**, combined from two on-chain source
 - Next.js 15 (App Router) + React 19 + Tailwind v3 + TypeScript + viem.
 - Node 18 on this machine → pinned to Next 15.x.
 - Vercel, team `clawmvps-projects`. Domain `link-op.n01.app`. Auto-deploy on push to `main`.
-- No DB, no auth. Data lives in a committed snapshot + a light runtime top-up.
+- No DB. Data lives in a committed snapshot + a light runtime top-up.
+- **Basic Auth** via Edge [`middleware.ts`](middleware.ts), gated on env `AUTH_USER` /
+  `AUTH_PASS` (set in Vercel). Unset → no enforcement (local dev convenience).
+
+## Per-operator detail
+Each table row opens a modal ([`components/OperatorDetail.tsx`](components/OperatorDetail.tsx))
+with a month-by-month revenue breakdown: stacked SVG bar chart (earmark vs direct) +
+a per-month table (LINK, USD, event count). The series is built server-side by
+[`lib/monthly.ts`](lib/monthly.ts) `monthlyByOperator` (UTC months, active operators
+only) and passed through [`lib/data.ts`](lib/data.ts) as `DashboardData.monthly`.
 
 ## Data model — how freshness works
 1. [`scripts/refresh.ts`](scripts/refresh.ts) (`npm run refresh`) full-scans EarmarkSet
