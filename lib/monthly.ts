@@ -7,11 +7,42 @@ export type MonthPoint = {
   direct: string; // wei
   total: string; // wei
   count: number; // number of revenue events in the month
+  operators?: number; // distinct operators active (only set on aggregate series)
 };
 
 // Per-operator monthly breakdown, keyed by lowercase address. Each value is a
 // chronologically ascending list of months with at least one event.
 export type MonthlyByOperator = Record<string, MonthPoint[]>;
+
+// Sum a per-operator monthly breakdown into a single global series: one point
+// per month with combined earmark/direct/total across all operators, plus the
+// number of operators active that month. Ascending by month.
+export function sumMonthly(byOp: MonthlyByOperator): MonthPoint[] {
+  const acc = new Map<string, { e: bigint; d: bigint; n: number; ops: number }>();
+  for (const months of Object.values(byOp)) {
+    for (const m of months) {
+      let cell = acc.get(m.ym);
+      if (!cell) {
+        cell = { e: 0n, d: 0n, n: 0, ops: 0 };
+        acc.set(m.ym, cell);
+      }
+      cell.e += BigInt(m.earmarked);
+      cell.d += BigInt(m.direct);
+      cell.n += m.count;
+      cell.ops += 1;
+    }
+  }
+  return [...acc.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([ym, c]) => ({
+      ym,
+      earmarked: c.e.toString(),
+      direct: c.d.toString(),
+      total: (c.e + c.d).toString(),
+      count: c.n,
+      operators: c.ops,
+    }));
+}
 
 // UTC year-month key ("2026-06") from a unix-seconds timestamp.
 function ymKey(ts: number): string {

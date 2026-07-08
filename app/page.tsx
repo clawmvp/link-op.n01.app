@@ -2,6 +2,7 @@ import { getData } from "@/lib/data";
 import { fmtLink, fmtUsd } from "@/lib/format";
 import { PAYMENTS_CONTRACT, SAFE_CONTRACT, SELF_OPERATOR } from "@/lib/config";
 import OperatorsTable from "@/components/OperatorsTable";
+import RevenueChart from "@/components/RevenueChart";
 
 export const revalidate = 1800;
 
@@ -27,7 +28,8 @@ function Stat({
 
 export default async function Home() {
   const data = await getData();
-  const { operators, monthly, linkUsd, totalLink, totalDirect } = data;
+  const { operators, monthly, monthlyTotals, linkUsd, totalLink, totalDirect } =
+    data;
 
   const selfIdx = operators.findIndex(
     (o) => o.address.toLowerCase() === SELF_OPERATOR,
@@ -106,6 +108,10 @@ export default async function Home() {
         ) : (
           <Stat label="LINK / USD" value={linkUsd ? `$${linkUsd}` : "—"} />
         )}
+      </section>
+
+      <section className="mb-8">
+        <RevenueChart months={monthlyTotals} linkUsd={linkUsd} />
       </section>
 
       <OperatorsTable operators={operators} monthly={monthly} linkUsd={linkUsd} />
