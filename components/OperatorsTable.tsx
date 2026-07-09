@@ -47,9 +47,11 @@ export default function OperatorsTable({
       });
     }
     // Held may be unknown (RPC miss) — treat as 0 so those rows sink to the
-    // bottom when sorting by wallet balance.
+    // bottom when sorting by wallet balance. "Held" = main wallet + cold storage.
     const val = (o: Operator) =>
-      sort === "held" ? BigInt(o.held ?? "0") : BigInt(o[sort]);
+      sort === "held"
+        ? BigInt(o.held ?? "0") + BigInt(o.coldHeld ?? "0")
+        : BigInt(o[sort]);
     return [...r]
       .sort((a, b) => (val(a) < val(b) ? 1 : -1))
       .map((o, i) => ({ ...o, rank: i + 1 }));
@@ -150,17 +152,29 @@ export default function OperatorsTable({
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-ink-100">
-                    {o.held != null ? (
-                      <>
-                        {fmtLink(o.held)}
-                        <span
-                          className={`block text-[11px] font-normal ${retentionClass(
-                            retentionPct(o.held, o.totalLink),
-                          )}`}
-                        >
-                          {retentionLabel(o.held, o.totalLink)}
-                        </span>
-                      </>
+                    {o.held != null || o.coldHeld != null ? (
+                      (() => {
+                        const cold = BigInt(o.coldHeld ?? "0");
+                        const combined = (BigInt(o.held ?? "0") + cold).toString();
+                        return (
+                          <>
+                            {fmtLink(combined)}
+                            <span
+                              className={`block text-[11px] font-normal ${retentionClass(
+                                retentionPct(combined, o.totalLink),
+                              )}`}
+                            >
+                              {retentionLabel(combined, o.totalLink)}
+                              {cold > 0n ? (
+                                <span className="text-sky-400/80">
+                                  {" "}
+                                  · +{fmtLink(o.coldHeld!, 0)} cold?
+                                </span>
+                              ) : null}
+                            </span>
+                          </>
+                        );
+                      })()
                     ) : (
                       <span className="text-ink-600">—</span>
                     )}

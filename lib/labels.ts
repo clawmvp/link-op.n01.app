@@ -17,6 +17,30 @@ export const EXCLUDE = new Set<string>([
   "0x1c911eec9b3016716c5e708b02d3b4f679807954", // treasury counterparty / router
 ]);
 
+// Known exchange / bridge / market-maker addresses. The cold-storage tracer
+// never follows into these and never counts their balances — a deposit to an
+// exchange is a sale, not self-custody. Best-effort list; the tracer's other
+// guards (skip contracts, cap counted amount to what the cluster actually sent)
+// bound any misattribution even for services not listed here.
+export const KNOWN_SERVICES = new Set<string>([
+  "0x0000000000000000000000000000000000000000", // null / burn
+  "0x000000000000000000000000000000000000dead", // burn
+  "0x28c6c06298d514db089934071355e5743bf21d60", // Binance 14
+  "0x21a31ee1afc51d94c2efccaa2092ad1028285549", // Binance 15
+  "0xdfd5293d8e347dfe59e90efd55b2956a1343963d", // Binance 16
+  "0x56eddb7aa87536c09ccc2793473599fd21a8b17f", // Binance 17
+  "0x9696f59e4d72e237be84ffd425dcad154bf96976", // Binance 18
+  "0x4976a4a02f38326660d17bf34b431dc6e2eb2327", // Binance 20 (LINK-heavy)
+  "0x71660c4005ba85c37ccec55d0c4493e66fe775d3", // Coinbase 1
+  "0x503828976d22510aad0201ac7ec88293211d23da", // Coinbase 2
+  "0xddfabcdc4d8ffc6d5beaf154f18b778f892a0740", // Coinbase 3
+  "0x3cd751e6b0078be393132286c442345e5dc49699", // Coinbase 4
+  "0xa910f92acdaf488fa6ef02174fb86208ad7722ba", // Kraken
+  "0x2910543af39aba0cd09dbb2d50200b3e800a63d2", // Kraken 4
+  "0x6cc5f688a315f3dc28a7781717a9a798a59fda7b", // OKX
+  "0xf89d7b9c864f589bbf53a82105107622b35eaa40", // Bybit
+]);
+
 export function displayName(
   address: string,
   ens: string | null,

@@ -89,17 +89,44 @@ async function loadData(): Promise<DashboardData> {
   const monthly = monthlyByOperator(events, activeSet);
   const monthlyTotals = sumMonthly(monthly);
 
-  // Current LINK still held in each operator's wallet ("warchest"). Best-effort:
-  // if the RPC balance calls fail, operators simply render without a held value.
+  // Current LINK still held ("warchest"): the operator's main wallet plus any
+  // traced cold-storage wallets (≤3 hops). Each cold wallet's contribution is
+  // capped to what the operator's cluster actually sent it, so we never count a
+  // third party's balance. Best-effort: RPC failures just mean no held value.
+  const cold = (BASE.cold ?? {}) as Record<string, [string, string][]>;
   let totalHeld = 0n;
   try {
-    const balances = await fetchLinkBalances(operators.map((o) => o.address));
+    const coldWallets = Object.values(cold).flatMap((list) => list.map(([w]) => w));
+    const balances = await fetchLinkBalances([
+      ...operators.map((o) => o.address),
+      ...coldWallets,
+    ]);
     for (const o of operators) {
       const h = balances[o.address];
-      if (h != null) {
-        o.held = h;
-        totalHeld += BigInt(h);
+      if (h != null) o.held = h;
+
+      const list = cold[o.address] ?? [];
+      let coldSum = 0n;
+      const perWallet: { wallet: string; held: string }[] = [];
+      for (const [w, inflowWei] of list) {
+        const bal = balances[w];
+        if (bal == null) continue;
+        // count min(current balance, LINK the cluster sent here)
+        const counted = BigInt(bal) < BigInt(inflowWei) ? BigInt(bal) : BigInt(inflowWei);
+        if (counted <= 0n) continue;
+        coldSum += counted;
+        perWallet.push({ wallet: w, held: counted.toString() });
       }
+      // Safety cap: cold-storage savings can't exceed tracked revenue. Prevents
+      // any residual over-attribution from inflating an operator's held.
+      const revCap = BigInt(o.totalLink);
+      if (coldSum > revCap) coldSum = revCap;
+      if (coldSum > 0n) {
+        o.coldHeld = coldSum.toString();
+        o.cold = perWallet.sort((a, b) => (BigInt(a.held) < BigInt(b.held) ? 1 : -1));
+      }
+
+      totalHeld += BigInt(o.held ?? "0") + coldSum;
     }
   } catch {
     /* leave held unset */
@@ -123,7 +150,7 @@ async function loadData(): Promise<DashboardData> {
   };
 }
 
-export const getData = unstable_cache(loadData, ["earmark-data-v4"], {
+export const getData = unstable_cache(loadData, ["earmark-data-v5"], {
   revalidate: 1800,
 });
 

@@ -55,7 +55,12 @@ export default async function OperatorPage({
   const fmtAvg = (n: number) =>
     n.toLocaleString("en-US", { maximumFractionDigits: 0 });
 
-  const held = operator.held;
+  const mainHeld = operator.held;
+  const coldHeld = operator.coldHeld;
+  const held =
+    mainHeld != null || coldHeld != null
+      ? (BigInt(mainHeld ?? "0") + BigInt(coldHeld ?? "0")).toString()
+      : undefined;
   const retPct = retentionPct(held, operator.totalLink);
 
   const summary = [
@@ -175,16 +180,53 @@ export default async function OperatorPage({
                 of {fmtLink(operator.totalLink, 0)} LINK earned
               </span>
             </div>
+            {coldHeld != null && BigInt(coldHeld) > 0n && (
+              <div className="text-sm text-ink-400">
+                {fmtLink(mainHeld ?? "0", 0)} main wallet{" "}
+                <span className="text-sky-400/80">
+                  + {fmtLink(coldHeld, 0)} cold storage?
+                </span>
+              </div>
+            )}
           </div>
         ) : (
           <p className="mt-2 text-sm text-ink-500">
             Wallet balance unavailable right now.
           </p>
         )}
+
+        {operator.cold && operator.cold.length > 0 && (
+          <div className="mt-3 border-t border-ink-800 pt-3">
+            <div className="text-[11px] uppercase tracking-wider text-ink-600">
+              Maybe cold storage · traced ≤3 hops
+            </div>
+            <ul className="mt-1.5 space-y-1">
+              {operator.cold.map((c) => (
+                <li
+                  key={c.wallet}
+                  className="flex items-center justify-between gap-3 text-xs"
+                >
+                  <a
+                    href={`https://etherscan.io/address/${c.wallet}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-link-light hover:underline"
+                  >
+                    {c.wallet.slice(0, 10)}…{c.wallet.slice(-8)}
+                  </a>
+                  <span className="tabular-nums text-ink-300">
+                    {fmtLink(c.held, 0)} LINK
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <p className="mt-2 text-[11px] leading-relaxed text-ink-600">
-          Current LINK balance of this address vs. all-time tracked revenue. Can
-          exceed 100% if the wallet holds LINK from other sources; operators may
-          also move funds to separate custody, so treat this as a directional
+          Current LINK balance of the main wallet plus any self-custody wallets we
+          could trace within 3 hops (each capped to what this operator actually
+          sent there). Can exceed 100% if wallets hold LINK from other sources;
+          cold-storage attribution is heuristic — treat as a directional
           &ldquo;kept vs. moved&rdquo; signal, not exact savings.
         </p>
       </section>
