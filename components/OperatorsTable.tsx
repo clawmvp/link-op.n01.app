@@ -11,10 +11,11 @@ import { SELF_OPERATOR } from "@/lib/config";
 import { retentionPct, retentionClass, retentionLabel } from "@/lib/retention";
 import Sparkline from "./Sparkline";
 
-type SortKey = "totalLink" | "last30" | "last90";
+type SortKey = "totalLink" | "held" | "last30" | "last90";
 
 const SORTS: [SortKey, string][] = [
   ["totalLink", "Total"],
+  ["held", "Held"],
   ["last30", "Last 30d"],
   ["last90", "Last 90d"],
 ];
@@ -45,8 +46,12 @@ export default function OperatorsTable({
         );
       });
     }
+    // Held may be unknown (RPC miss) — treat as 0 so those rows sink to the
+    // bottom when sorting by wallet balance.
+    const val = (o: Operator) =>
+      sort === "held" ? BigInt(o.held ?? "0") : BigInt(o[sort]);
     return [...r]
-      .sort((a, b) => (BigInt(a[sort]) < BigInt(b[sort]) ? 1 : -1))
+      .sort((a, b) => (val(a) < val(b) ? 1 : -1))
       .map((o, i) => ({ ...o, rank: i + 1 }));
   }, [operators, q, sort]);
 
@@ -90,7 +95,7 @@ export default function OperatorsTable({
               <th className="px-4 py-3 font-medium">#</th>
               <th className="px-4 py-3 font-medium">Operator</th>
               <th className={colClass("totalLink")}>Total (LINK)</th>
-              <th className="px-4 py-3 text-right font-medium">Held (wallet)</th>
+              <th className={colClass("held")}>Held (wallet)</th>
               <th className={colClass("last30")}>Last 30d</th>
               <th className={colClass("last90")}>Last 90d</th>
               <th className="px-4 py-3 text-center font-medium">14-mo trend</th>
