@@ -19,8 +19,18 @@ import {
 import { resolveEns } from "../lib/ens";
 import { linkUsd } from "../lib/price";
 import { traceCold } from "../lib/trace";
+import { buildWarchestSeries } from "../lib/warchestBuild";
+import { rpc } from "../lib/rpc";
 import { EXCLUDE } from "../lib/labels";
 import type { EventTuple, Snapshot } from "../lib/types";
+
+async function getBlockTs(block: number): Promise<number | null> {
+  const b = await rpc<{ timestamp: string } | null>("eth_getBlockByNumber", [
+    "0x" + block.toString(16),
+    false,
+  ]).catch(() => null);
+  return b?.timestamp ? parseInt(b.timestamp, 16) : null;
+}
 
 async function main() {
   const latest = await blockNumber();
@@ -71,6 +81,23 @@ async function main() {
     `Found ${coldWalletCount} cold-storage wallets across ${Object.keys(cold).length} operators.`,
   );
 
+  // Warchest over time: monthly LINK balance of each operator's cluster
+  // (main wallet + its cold-storage wallets).
+  const clusters: Record<string, string[]> = {};
+  for (const op of addresses) {
+    clusters[op] = [op, ...(cold[op] ?? []).map(([w]) => w)];
+  }
+  const anchorTs = Number((await getBlockTs(latest)) ?? Math.floor(Date.now() / 1000));
+  console.log(`Building warchest series …`);
+  const warchest = await buildWarchestSeries(
+    clusters,
+    Math.min(DEPLOY_BLOCK, SAFE_DEPLOY_BLOCK),
+    latest,
+    latest,
+    anchorTs,
+  );
+  console.log(`Warchest series for ${Object.keys(warchest).length} operators.`);
+
   const snap: Snapshot = {
     generatedAt: Math.floor(Date.now() / 1000),
     fromBlock: Math.min(DEPLOY_BLOCK, SAFE_DEPLOY_BLOCK),
@@ -79,6 +106,7 @@ async function main() {
     ens,
     events,
     cold,
+    warchest,
   };
 
   const out = join(process.cwd(), "lib", "snapshot.json");

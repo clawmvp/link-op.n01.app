@@ -7,10 +7,13 @@ import { displayName } from "@/lib/labels";
 import { SELF_OPERATOR } from "@/lib/config";
 import { operatorStats } from "@/lib/stats";
 import { retentionPct, retentionClass } from "@/lib/retention";
+import { getWarchestSeries } from "@/lib/warchest";
 import { StatLine, Delta } from "@/components/StatBits";
 import OperatorMonthlyChart, {
   monthLabel,
 } from "@/components/OperatorMonthlyChart";
+import WarchestChart from "@/components/WarchestChart";
+import WalletFlowDiagram from "@/components/WalletFlowDiagram";
 
 export const revalidate = 1800;
 
@@ -62,6 +65,7 @@ export default async function OperatorPage({
       ? (BigInt(mainHeld ?? "0") + BigInt(coldHeld ?? "0")).toString()
       : undefined;
   const retPct = retentionPct(held, operator.totalLink);
+  const warchestSeries = getWarchestSeries(operator.address);
 
   const summary = [
     {
@@ -201,7 +205,9 @@ export default async function OperatorPage({
               Maybe cold storage · traced ≤3 hops
             </div>
             <ul className="mt-1.5 space-y-1">
-              {operator.cold.map((c) => (
+              {operator.cold
+                .filter((c) => BigInt(c.held) > 0n)
+                .map((c) => (
                 <li
                   key={c.wallet}
                   className="flex items-center justify-between gap-3 text-xs"
@@ -222,12 +228,37 @@ export default async function OperatorPage({
             </ul>
           </div>
         )}
-        <p className="mt-2 text-[11px] leading-relaxed text-ink-600">
+
+        {operator.cold && operator.cold.length > 0 && (
+          <div className="mt-4 border-t border-ink-800 pt-3">
+            <div className="mb-1.5 text-[11px] uppercase tracking-wider text-ink-600">
+              Flow — main wallet → cold storage
+            </div>
+            <WalletFlowDiagram
+              main={operator.address}
+              mainName={primary}
+              mainHeld={mainHeld}
+              cold={operator.cold}
+            />
+          </div>
+        )}
+
+        {warchestSeries.length >= 2 && (
+          <div className="mt-4 border-t border-ink-800 pt-3">
+            <div className="mb-1 text-[11px] uppercase tracking-wider text-ink-600">
+              Warchest over time · main + cold wallets
+            </div>
+            <WarchestChart series={warchestSeries} linkUsd={linkUsd} />
+          </div>
+        )}
+
+        <p className="mt-3 text-[11px] leading-relaxed text-ink-600">
           Current LINK balance of the main wallet plus any self-custody wallets we
           could trace within 3 hops (each capped to what this operator actually
-          sent there). Can exceed 100% if wallets hold LINK from other sources;
-          cold-storage attribution is heuristic — treat as a directional
-          &ldquo;kept vs. moved&rdquo; signal, not exact savings.
+          sent there). The chart reconstructs the cluster&rsquo;s LINK balance
+          month by month from on-chain transfers. Can exceed 100% if wallets hold
+          LINK from other sources; cold-storage attribution is heuristic — treat
+          as a directional &ldquo;kept vs. moved&rdquo; signal, not exact savings.
         </p>
       </section>
 

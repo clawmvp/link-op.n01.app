@@ -93,7 +93,10 @@ async function loadData(): Promise<DashboardData> {
   // traced cold-storage wallets (≤3 hops). Each cold wallet's contribution is
   // capped to what the operator's cluster actually sent it, so we never count a
   // third party's balance. Best-effort: RPC failures just mean no held value.
-  const cold = (BASE.cold ?? {}) as Record<string, [string, string][]>;
+  const cold = (BASE.cold ?? {}) as Record<
+    string,
+    [string, string, string, number][]
+  >;
   let totalHeld = 0n;
   try {
     const coldWallets = Object.values(cold).flatMap((list) => list.map(([w]) => w));
@@ -107,15 +110,22 @@ async function loadData(): Promise<DashboardData> {
 
       const list = cold[o.address] ?? [];
       let coldSum = 0n;
-      const perWallet: { wallet: string; held: string }[] = [];
-      for (const [w, inflowWei] of list) {
+      const perWallet: NonNullable<Operator["cold"]> = [];
+      for (const [w, inflowWei, parent, hop] of list) {
         const bal = balances[w];
         if (bal == null) continue;
         // count min(current balance, LINK the cluster sent here)
         const counted = BigInt(bal) < BigInt(inflowWei) ? BigInt(bal) : BigInt(inflowWei);
-        if (counted <= 0n) continue;
         coldSum += counted;
-        perWallet.push({ wallet: w, held: counted.toString() });
+        // Keep even zero-balance wallets: they're pass-through hops that the
+        // flow diagram needs to connect the chain (main → … → held wallet).
+        perWallet.push({
+          wallet: w,
+          held: counted.toString(),
+          inflow: inflowWei,
+          parent,
+          hop,
+        });
       }
       // Safety cap: cold-storage savings can't exceed tracked revenue. Prevents
       // any residual over-attribution from inflating an operator's held.
@@ -150,7 +160,7 @@ async function loadData(): Promise<DashboardData> {
   };
 }
 
-export const getData = unstable_cache(loadData, ["earmark-data-v5"], {
+export const getData = unstable_cache(loadData, ["earmark-data-v6"], {
   revalidate: 1800,
 });
 

@@ -16,7 +16,14 @@ export type Operator = {
   lastTs: number; // unix seconds of the most recent event
   held?: string; // current LINK balance in the operator's main wallet, wei
   coldHeld?: string; // LINK held in traced cold-storage wallets (≤3 hops), wei
-  cold?: { wallet: string; held: string }[]; // per cold wallet, counted held wei
+  // per cold wallet: counted held (wei), the LINK that flowed in, and where from.
+  cold?: {
+    wallet: string;
+    held: string;
+    inflow: string;
+    parent: string;
+    hop: number;
+  }[];
 };
 
 // Compact event row stored in the snapshot:
@@ -30,8 +37,11 @@ export type Snapshot = {
   linkUsd: number | null;
   ens: Record<string, string | null>; // resolved reverse-ENS, keyed by address
   events: EventTuple[]; // every decoded EarmarkSet, chronological
-  // Traced cold-storage wallets per operator: [wallet, clusterInflowWei].
-  cold?: Record<string, [string, string][]>;
+  // Traced cold-storage wallets per operator: [wallet, inflowWei, parent, hop].
+  cold?: Record<string, [string, string, string, number][]>;
+  // Warchest over time per operator: ascending [ym, combinedHeldWei] — the LINK
+  // balance of the operator's cluster (main + cold wallets) at each month end.
+  warchest?: Record<string, [string, string][]>;
 };
 
 // One decoded EarmarkSet event.

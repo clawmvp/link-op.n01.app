@@ -21,8 +21,10 @@ const pad32 = (a: string) => "0x" + a.toLowerCase().replace(/^0x/, "").padStart(
 type RawLog = { topics: string[]; data: string };
 type Edge = { from: string; to: string; amount: bigint };
 
-// op -> list of [coldWallet, inflowWei] the operator's cluster sent there.
-export type ColdMap = Record<string, [string, string][]>;
+// op -> list of [coldWallet, inflowWei, parentWallet, hop]. `parent` is the
+// wallet that fed it (the operator's main wallet at hop 1, else another cold
+// wallet); `hop` is 1..depth. Enough to draw the main→…→cold flow.
+export type ColdMap = Record<string, [string, string, string, number][]>;
 
 export type TraceOptions = {
   minFlowWei: bigint;
@@ -103,6 +105,8 @@ export async function traceCold(
 
   const owner = new Map<string, string>(); // wallet -> operator root that claimed it
   const inflow = new Map<string, bigint>(); // wallet -> LINK received from its cluster
+  const parentOf = new Map<string, string>(); // wallet -> wallet that fed it
+  const hopOf = new Map<string, number>(); // wallet -> hop distance from main
   const cluster = new Map<string, Set<string>>();
   ops.forEach((o) => cluster.set(o, new Set()));
 
@@ -128,7 +132,7 @@ export async function traceCold(
     }
 
     // pick candidate destinations, enforcing dust / fan-out / cluster-size caps
-    const candidates = new Map<string, { root: string; amount: bigint }>();
+    const candidates = new Map<string, { root: string; amount: bigint; parent: string }>();
     for (const [from, dests] of byFrom) {
       const root = frontier.get(from)!;
       const cap = opts.caps[root] ?? 0n;
@@ -144,17 +148,19 @@ export async function traceCold(
           continue;
         }
         const prev = candidates.get(to);
-        if (!prev || amt > prev.amount) candidates.set(to, { root, amount: amt });
+        if (!prev || amt > prev.amount) candidates.set(to, { root, amount: amt, parent: from });
       }
     }
 
     // drop contracts, commit the rest as this level's discoveries
     const contracts = await contractSet([...candidates.keys()]);
     const next = new Map<string, string>();
-    for (const [to, { root, amount }] of candidates) {
+    for (const [to, { root, amount, parent }] of candidates) {
       if (contracts.has(to)) continue;
       owner.set(to, root);
       inflow.set(to, amount);
+      parentOf.set(to, parent);
+      hopOf.set(to, d + 1);
       cluster.get(root)!.add(to);
       next.set(to, root);
     }
@@ -170,7 +176,15 @@ export async function traceCold(
     const list = [...cl]
       .map((w) => [w, inflow.get(w) ?? 0n] as const)
       .filter(([, inf]) => inf <= cap)
-      .map(([w, inf]) => [w, inf.toString()] as [string, string]);
+      .map(
+        ([w, inf]) =>
+          [w, inf.toString(), parentOf.get(w) ?? o, hopOf.get(w) ?? 1] as [
+            string,
+            string,
+            string,
+            number,
+          ],
+      );
     if (list.length) out[o] = list;
   }
   return out;
