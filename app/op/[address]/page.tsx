@@ -67,6 +67,12 @@ export default async function OperatorPage({
   const retPct = retentionPct(held, operator.totalLink);
   const warchestSeries = getWarchestSeries(operator.address);
 
+  // LINK held beyond what we could attribute to tracked revenue — i.e. from
+  // other sources (other Chainlink programs, OTC, older holdings).
+  const earnedWei = BigInt(operator.totalLink);
+  const extraWei =
+    held != null && BigInt(held) > earnedWei ? BigInt(held) - earnedWei : 0n;
+
   const summary = [
     {
       label: "Total",
@@ -155,6 +161,32 @@ export default async function OperatorPage({
         <StatLine label="MoM (last month)" value={<Delta pct={stats.momPct} />} />
         <StatLine label="Momentum (3mo)" value={<Delta pct={stats.momentumPct} />} />
         <StatLine label="Direct share" value={`${stats.directPct.toFixed(0)}%`} />
+        <StatLine
+          label="Held (warchest)"
+          value={held != null ? `${fmtLink(held, 0)} LINK` : "—"}
+        />
+        <StatLine
+          label="Retention"
+          value={
+            retPct != null ? (
+              <span className={retentionClass(retPct)}>{`${retPct.toFixed(0)}%`}</span>
+            ) : (
+              "—"
+            )
+          }
+        />
+        <StatLine
+          label="Extra held"
+          value={
+            held == null ? (
+              "—"
+            ) : extraWei > 0n ? (
+              <span className="text-emerald-400">+{fmtLink(extraWei.toString(), 0)}</span>
+            ) : (
+              "0"
+            )
+          }
+        />
       </section>
 
       {/* Warchest — how much of what they earned is still in the wallet */}
@@ -197,6 +229,22 @@ export default async function OperatorPage({
           <p className="mt-2 text-sm text-ink-500">
             Wallet balance unavailable right now.
           </p>
+        )}
+
+        {extraWei > 0n && (
+          <div className="mt-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-sm">
+            <span className="font-semibold text-emerald-300">
+              +{fmtLink(extraWei.toString(), 0)} LINK
+            </span>
+            <span className="text-ink-400">
+              {" "}
+              held beyond tracked revenue
+              {fmtUsd(extraWei.toString(), linkUsd)
+                ? ` (${fmtUsd(extraWei.toString(), linkUsd)})`
+                : ""}{" "}
+              — from other sources (other Chainlink programs, OTC, or older holdings).
+            </span>
+          </div>
         )}
 
         {operator.cold && operator.cold.length > 0 && (

@@ -74,7 +74,7 @@ async function main() {
     Math.min(DEPLOY_BLOCK, SAFE_DEPLOY_BLOCK),
     latest,
     EXCLUDE,
-    { minFlowWei: 100n * 10n ** 18n, maxFanout: 5, depth: 3, maxClusterPerOp: 12, caps },
+    { minFlowWei: 100n * 10n ** 18n, maxFanout: 5, depth: 5, maxClusterPerOp: 20, caps },
   );
   const coldWalletCount = Object.values(cold).reduce((n, l) => n + l.length, 0);
   console.log(
