@@ -81,7 +81,7 @@ export default async function Home() {
           </a>
           . Active operators only (paid in the last 30 days).{" "}
           <span className="text-ink-300">
-            Click any operator for a month-by-month breakdown.
+            Open any operator for a month-by-month breakdown.
           </span>
         </p>
       </header>
@@ -144,13 +144,7 @@ export default async function Home() {
         />
       </section>
 
-      <OperatorsTable
-        operators={operators}
-        monthly={monthly}
-        linkUsd={linkUsd}
-        totalLink={totalLink}
-        generatedAt={data.generatedAt}
-      />
+      <OperatorsTable operators={operators} monthly={monthly} linkUsd={linkUsd} />
 
       <footer className="mt-10 flex flex-col gap-2 border-t border-ink-800 pt-6 text-xs text-ink-500 sm:flex-row sm:items-center sm:justify-between">
         <div>

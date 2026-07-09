@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Operator } from "@/lib/types";
 import type { MonthlyByOperator } from "@/lib/monthly";
 import { fmtLink, fmtUsd, timeAgo } from "@/lib/format";
 import { displayName } from "@/lib/labels";
 import { SELF_OPERATOR } from "@/lib/config";
-import OperatorDetail from "./OperatorDetail";
 import Sparkline from "./Sparkline";
 
 type SortKey = "totalLink" | "last30" | "last90";
@@ -21,18 +22,14 @@ export default function OperatorsTable({
   operators,
   monthly,
   linkUsd,
-  totalLink,
-  generatedAt,
 }: {
   operators: Operator[];
   monthly: MonthlyByOperator;
   linkUsd: number | null;
-  totalLink: string;
-  generatedAt: number;
 }) {
+  const router = useRouter();
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("totalLink");
-  const [selected, setSelected] = useState<Operator | null>(null);
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -106,8 +103,8 @@ export default function OperatorsTable({
               return (
                 <tr
                   key={o.address}
-                  onClick={() => setSelected(o)}
-                  title="Click for month-by-month detail"
+                  onClick={() => router.push(`/op/${o.address}`)}
+                  title="Open month-by-month detail page"
                   className={`group cursor-pointer border-b border-ink-800/60 transition hover:bg-ink-800/40 ${
                     isSelf ? "bg-link/10" : ""
                   }`}
@@ -115,17 +112,15 @@ export default function OperatorsTable({
                   <td className="px-4 py-3 tabular-nums text-ink-500">{o.rank}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <a
-                        href={`https://etherscan.io/address/${o.address}`}
-                        target="_blank"
-                        rel="noreferrer"
+                      <Link
+                        href={`/op/${o.address}`}
                         onClick={(e) => e.stopPropagation()}
                         className={`font-medium hover:underline ${
                           isEns ? "text-link-light" : "text-ink-100"
                         }`}
                       >
                         {primary}
-                      </a>
+                      </Link>
                       {isSelf && (
                         <span className="rounded bg-link px-1.5 py-0.5 text-[10px] font-semibold uppercase text-white">
                           you
@@ -170,17 +165,6 @@ export default function OperatorsTable({
           </tbody>
         </table>
       </div>
-
-      {selected && (
-        <OperatorDetail
-          operator={selected}
-          months={monthly[selected.address] ?? []}
-          linkUsd={linkUsd}
-          networkTotal={totalLink}
-          nowTs={generatedAt}
-          onClose={() => setSelected(null)}
-        />
-      )}
     </div>
   );
 }
