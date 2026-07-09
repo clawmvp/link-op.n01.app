@@ -6,6 +6,7 @@ import { fmtLink, fmtUsd, timeAgo } from "@/lib/format";
 import { displayName } from "@/lib/labels";
 import { SELF_OPERATOR } from "@/lib/config";
 import { operatorStats } from "@/lib/stats";
+import { retentionPct, retentionClass } from "@/lib/retention";
 import { StatLine, Delta } from "@/components/StatBits";
 import OperatorMonthlyChart, {
   monthLabel,
@@ -53,6 +54,9 @@ export default async function OperatorPage({
   const best = stats.peak;
   const fmtAvg = (n: number) =>
     n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+
+  const held = operator.held;
+  const retPct = retentionPct(held, operator.totalLink);
 
   const summary = [
     {
@@ -142,6 +146,47 @@ export default async function OperatorPage({
         <StatLine label="MoM (last month)" value={<Delta pct={stats.momPct} />} />
         <StatLine label="Momentum (3mo)" value={<Delta pct={stats.momentumPct} />} />
         <StatLine label="Direct share" value={`${stats.directPct.toFixed(0)}%`} />
+      </section>
+
+      {/* Warchest — how much of what they earned is still in the wallet */}
+      <section className="mb-6 rounded-xl border border-ink-800 bg-ink-900/60 px-5 py-4">
+        <div className="text-xs uppercase tracking-wider text-ink-500">
+          Warchest — LINK still held
+        </div>
+        {held != null ? (
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-semibold tabular-nums text-ink-100">
+                {fmtLink(held, 0)}
+              </span>
+              <span className="text-sm text-ink-400">LINK</span>
+              {fmtUsd(held, linkUsd) && (
+                <span className="text-sm text-ink-500">
+                  · {fmtUsd(held, linkUsd)}
+                </span>
+              )}
+            </div>
+            <div className="text-sm">
+              <span className={`font-semibold ${retentionClass(retPct)}`}>
+                {retPct != null ? `${retPct.toFixed(0)}% kept` : "—"}
+              </span>
+              <span className="text-ink-500">
+                {" "}
+                of {fmtLink(operator.totalLink, 0)} LINK earned
+              </span>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-ink-500">
+            Wallet balance unavailable right now.
+          </p>
+        )}
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-600">
+          Current LINK balance of this address vs. all-time tracked revenue. Can
+          exceed 100% if the wallet holds LINK from other sources; operators may
+          also move funds to separate custody, so treat this as a directional
+          &ldquo;kept vs. moved&rdquo; signal, not exact savings.
+        </p>
       </section>
 
       {/* Source split + best month */}

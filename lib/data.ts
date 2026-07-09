@@ -12,6 +12,7 @@ import {
 } from "./earmarks";
 import { resolveEns } from "./ens";
 import { linkUsd } from "./price";
+import { fetchLinkBalances } from "./balances";
 import { EXCLUDE } from "./labels";
 import {
   monthlyByOperator,
@@ -39,6 +40,7 @@ export type DashboardData = {
   total30: string;
   total90: string;
   totalEvents: number;
+  totalHeld: string; // combined current LINK held across active operators
 };
 
 // The committed snapshot is the baseline; at runtime we (a) refresh the LINK
@@ -87,6 +89,22 @@ async function loadData(): Promise<DashboardData> {
   const monthly = monthlyByOperator(events, activeSet);
   const monthlyTotals = sumMonthly(monthly);
 
+  // Current LINK still held in each operator's wallet ("warchest"). Best-effort:
+  // if the RPC balance calls fail, operators simply render without a held value.
+  let totalHeld = 0n;
+  try {
+    const balances = await fetchLinkBalances(operators.map((o) => o.address));
+    for (const o of operators) {
+      const h = balances[o.address];
+      if (h != null) {
+        o.held = h;
+        totalHeld += BigInt(h);
+      }
+    }
+  } catch {
+    /* leave held unset */
+  }
+
   return {
     generatedAt: now,
     fromBlock: BASE.fromBlock,
@@ -101,10 +119,11 @@ async function loadData(): Promise<DashboardData> {
     total30: sumField(operators, "last30"),
     total90: sumField(operators, "last90"),
     totalEvents: operators.reduce((n, o) => n + o.earmarks, 0),
+    totalHeld: totalHeld.toString(),
   };
 }
 
-export const getData = unstable_cache(loadData, ["earmark-data-v3"], {
+export const getData = unstable_cache(loadData, ["earmark-data-v4"], {
   revalidate: 1800,
 });
 

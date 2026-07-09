@@ -124,9 +124,17 @@ export default async function Home() {
           sub={`LINK · median ${fmtLink(net.medianTotalWei, 0)}`}
         />
         <Stat
-          label="Avg 30d / operator"
-          value={fmtLink(net.avg30Wei, 0)}
-          sub="LINK · last 30 days"
+          label="Warchest (held)"
+          value={fmtLink(data.totalHeld, 0)}
+          sub={
+            BigInt(totalLink) > 0n
+              ? `LINK · ${(
+                  (Number(BigInt(data.totalHeld) / 10n ** 12n) /
+                    Number(BigInt(totalLink) / 10n ** 12n)) *
+                  100
+                ).toFixed(0)}% of earned kept`
+              : "LINK held in wallets"
+          }
         />
         <Stat
           label="Top 5 concentration"

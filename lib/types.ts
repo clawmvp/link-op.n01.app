@@ -14,6 +14,7 @@ export type Operator = {
   firstBlock: number;
   lastBlock: number;
   lastTs: number; // unix seconds of the most recent event
+  held?: string; // current LINK balance in the operator's wallet, wei (if known)
 };
 
 // Compact event row stored in the snapshot:
