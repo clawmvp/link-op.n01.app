@@ -13,6 +13,7 @@ import {
 import { resolveEns } from "./ens";
 import { linkUsd } from "./price";
 import { fetchLinkBalances } from "./balances";
+import { fetchStaking, STAKING_SOURCES } from "./staking";
 import { EXCLUDE } from "./labels";
 import {
   monthlyByOperator,
@@ -41,6 +42,7 @@ export type DashboardData = {
   total90: string;
   totalEvents: number;
   totalHeld: string; // combined current LINK held across active operators
+  totalStaked: string; // combined LINK staked across active operators
 };
 
 // The committed snapshot is the baseline; at runtime we (a) refresh the LINK
@@ -142,6 +144,39 @@ async function loadData(): Promise<DashboardData> {
     /* leave held unset */
   }
 
+  // LINK staked in official venues (Chainlink Staking pools + stake.link),
+  // queried across each operator's cluster wallets (main + cold). Separate,
+  // best-effort pass so a staking RPC hiccup never affects held. No cap: a
+  // position read directly from a cluster wallet is unambiguously the operator's.
+  let totalStaked = 0n;
+  try {
+    const clusterOf = (o: Operator) => [
+      o.address,
+      ...(cold[o.address] ?? []).map(([w]) => w),
+    ];
+    const staking = await fetchStaking(operators.flatMap(clusterOf));
+    for (const o of operators) {
+      const bySource: Record<string, bigint> = {};
+      for (const w of clusterOf(o)) {
+        const rec = staking[w];
+        if (!rec) continue;
+        for (const [key, amt] of Object.entries(rec)) {
+          bySource[key] = (bySource[key] ?? 0n) + BigInt(amt);
+        }
+      }
+      const stakedBy = STAKING_SOURCES.filter((s) => bySource[s.key])
+        .map((s) => ({ source: s.key, amount: bySource[s.key].toString() }));
+      if (stakedBy.length) {
+        const sum = stakedBy.reduce((n, s) => n + BigInt(s.amount), 0n);
+        o.staked = sum.toString();
+        o.stakedBy = stakedBy;
+        totalStaked += sum;
+      }
+    }
+  } catch {
+    /* leave staked unset */
+  }
+
   return {
     generatedAt: now,
     fromBlock: BASE.fromBlock,
@@ -157,10 +192,11 @@ async function loadData(): Promise<DashboardData> {
     total90: sumField(operators, "last90"),
     totalEvents: operators.reduce((n, o) => n + o.earmarks, 0),
     totalHeld: totalHeld.toString(),
+    totalStaked: totalStaked.toString(),
   };
 }
 
-export const getData = unstable_cache(loadData, ["earmark-data-v6"], {
+export const getData = unstable_cache(loadData, ["earmark-data-v7"], {
   revalidate: 1800,
 });
 

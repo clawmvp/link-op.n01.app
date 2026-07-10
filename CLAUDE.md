@@ -55,6 +55,17 @@ Everything on-chain lives in [`lib/config.ts`](lib/config.ts): contract address,
 event topic, deploy block, LINK token, self operator, RPC fallback list.
 No API keys required — public RPCs + CoinGecko (both optional/graceful).
 
+## Staked LINK
+[`lib/staking.ts`](lib/staking.ts) reads LINK staked by each operator's wallet
+cluster (main + traced cold) in official venues: Chainlink Staking v0.2 Operator
+& Community pools (`getStakerPrincipal(addr)`) and stake.link (stLINK
+`balanceOf`, ~1:1 with staked LINK). Attached in [`lib/data.ts`](lib/data.ts) as
+`Operator.staked` / `stakedBy[]` + `DashboardData.totalStaked`. Surfaced as a
+"Staked" table column (sortable), a home network tile, and a "Staked LINK"
+section on the operator page ("Total controlled" = held + staked). No cap — a
+position read from a cluster wallet is unambiguously the operator's. Runtime,
+best-effort (RPC failure → no staked value), included in the 30-min cache.
+
 ## Adding an operator label
 Reverse-ENS covers only operators who set it. Add known names by hand in
 [`lib/labels.ts`](lib/labels.ts) `LABELS` (keyed by lowercase address).

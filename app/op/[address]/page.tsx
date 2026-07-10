@@ -7,6 +7,7 @@ import { displayName } from "@/lib/labels";
 import { SELF_OPERATOR } from "@/lib/config";
 import { operatorStats } from "@/lib/stats";
 import { retentionPct, retentionClass } from "@/lib/retention";
+import { STAKING_BY_KEY } from "@/lib/staking";
 import { getWarchestSeries } from "@/lib/warchest";
 import { StatLine, Delta } from "@/components/StatBits";
 import OperatorMonthlyChart, {
@@ -66,6 +67,14 @@ export default async function OperatorPage({
       : undefined;
   const retPct = retentionPct(held, operator.totalLink);
   const warchestSeries = getWarchestSeries(operator.address);
+
+  const staked = operator.staked;
+  const stakedBy = operator.stakedBy ?? [];
+  // Everything the operator still controls: wallet-held + staked positions.
+  const controlled =
+    held != null || staked != null
+      ? (BigInt(held ?? "0") + BigInt(staked ?? "0")).toString()
+      : undefined;
 
   // LINK held beyond what we could attribute to tracked revenue — i.e. from
   // other sources (other Chainlink programs, OTC, older holdings).
@@ -164,6 +173,16 @@ export default async function OperatorPage({
         <StatLine
           label="Held (warchest)"
           value={held != null ? `${fmtLink(held, 0)} LINK` : "—"}
+        />
+        <StatLine
+          label="Staked"
+          value={
+            staked != null && BigInt(staked) > 0n ? (
+              <span className="text-violet-300">{`${fmtLink(staked, 0)} LINK`}</span>
+            ) : (
+              "—"
+            )
+          }
         />
         <StatLine
           label="Retention"
@@ -309,6 +328,65 @@ export default async function OperatorPage({
           as a directional &ldquo;kept vs. moved&rdquo; signal, not exact savings.
         </p>
       </section>
+
+      {/* Staked LINK — official staking venues */}
+      {staked != null && BigInt(staked) > 0n && (
+        <section className="mb-6 rounded-xl border border-violet-500/25 bg-violet-500/[0.06] px-5 py-4">
+          <div className="text-xs uppercase tracking-wider text-violet-300/80">
+            Staked LINK — official venues
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-semibold tabular-nums text-ink-100">
+              {fmtLink(staked, 0)}
+            </span>
+            <span className="text-sm text-ink-400">LINK</span>
+            {fmtUsd(staked, linkUsd) && (
+              <span className="text-sm text-ink-500">· {fmtUsd(staked, linkUsd)}</span>
+            )}
+          </div>
+
+          <ul className="mt-3 space-y-1.5">
+            {stakedBy.map((s) => {
+              const src = STAKING_BY_KEY[s.source];
+              return (
+                <li
+                  key={s.source}
+                  className="flex items-center justify-between gap-3 text-sm"
+                >
+                  <a
+                    href={`https://etherscan.io/address/${src?.contract ?? ""}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-violet-200 hover:underline"
+                  >
+                    {src?.label ?? s.source}
+                  </a>
+                  <span className="tabular-nums text-ink-200">
+                    {fmtLink(s.amount, 0)} LINK
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+
+          {controlled != null && (
+            <div className="mt-3 border-t border-violet-500/15 pt-3 text-sm text-ink-400">
+              Total controlled (held + staked):{" "}
+              <span className="font-semibold text-ink-100">
+                {fmtLink(controlled, 0)} LINK
+              </span>
+              {fmtUsd(controlled, linkUsd) ? ` · ${fmtUsd(controlled, linkUsd)}` : ""}
+            </div>
+          )}
+
+          <p className="mt-3 text-[11px] leading-relaxed text-ink-600">
+            LINK staked from this operator&rsquo;s wallet cluster in the Chainlink
+            Staking pools (read via <code>getStakerPrincipal</code>) and stake.link
+            (stLINK balance, ~1:1 with staked LINK). Withdrawn stake returns to a
+            wallet and would then show under held.
+          </p>
+        </section>
+      )}
 
       {/* Source split + best month */}
       <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-ink-400">

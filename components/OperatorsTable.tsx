@@ -9,13 +9,15 @@ import { fmtLink, fmtUsd, timeAgo } from "@/lib/format";
 import { displayName } from "@/lib/labels";
 import { SELF_OPERATOR } from "@/lib/config";
 import { retentionPct, retentionClass, retentionLabel } from "@/lib/retention";
+import { STAKING_BY_KEY } from "@/lib/staking";
 import Sparkline from "./Sparkline";
 
-type SortKey = "totalLink" | "held" | "last30" | "last90";
+type SortKey = "totalLink" | "held" | "staked" | "last30" | "last90";
 
 const SORTS: [SortKey, string][] = [
   ["totalLink", "Total"],
   ["held", "Held"],
+  ["staked", "Staked"],
   ["last30", "Last 30d"],
   ["last90", "Last 90d"],
 ];
@@ -51,7 +53,9 @@ export default function OperatorsTable({
     const val = (o: Operator) =>
       sort === "held"
         ? BigInt(o.held ?? "0") + BigInt(o.coldHeld ?? "0")
-        : BigInt(o[sort]);
+        : sort === "staked"
+          ? BigInt(o.staked ?? "0")
+          : BigInt(o[sort]);
     return [...r]
       .sort((a, b) => (val(a) < val(b) ? 1 : -1))
       .map((o, i) => ({ ...o, rank: i + 1 }));
@@ -91,13 +95,14 @@ export default function OperatorsTable({
       </div>
 
       <div className="scroll-x overflow-x-auto rounded-xl border border-ink-800 bg-ink-900/60">
-        <table className="w-full min-w-[980px] text-left text-sm">
+        <table className="w-full min-w-[1120px] text-left text-sm">
           <thead>
             <tr className="border-b border-ink-800 text-xs uppercase tracking-wider text-ink-500">
               <th className="px-4 py-3 font-medium">#</th>
               <th className="px-4 py-3 font-medium">Operator</th>
               <th className={colClass("totalLink")}>Total (LINK)</th>
               <th className={colClass("held")}>Held (wallet)</th>
+              <th className={colClass("staked")}>Staked</th>
               <th className={colClass("last30")}>Last 30d</th>
               <th className={colClass("last90")}>Last 90d</th>
               <th className="px-4 py-3 text-center font-medium">14-mo trend</th>
@@ -175,6 +180,20 @@ export default function OperatorsTable({
                           </>
                         );
                       })()
+                    ) : (
+                      <span className="text-ink-600">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-ink-100">
+                    {o.staked != null ? (
+                      <>
+                        {fmtLink(o.staked)}
+                        <span className="block text-[11px] font-normal text-violet-300/80">
+                          {(o.stakedBy ?? [])
+                            .map((s) => STAKING_BY_KEY[s.source]?.short ?? s.source)
+                            .join(", ")}
+                        </span>
+                      </>
                     ) : (
                       <span className="text-ink-600">—</span>
                     )}

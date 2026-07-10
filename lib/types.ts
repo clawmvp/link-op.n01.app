@@ -24,6 +24,9 @@ export type Operator = {
     parent: string;
     hop: number;
   }[];
+  staked?: string; // total LINK staked across official venues, wei
+  // per staking venue: source key (see STAKING_SOURCES) and staked LINK, wei.
+  stakedBy?: { source: string; amount: string }[];
 };
 
 // Compact event row stored in the snapshot:

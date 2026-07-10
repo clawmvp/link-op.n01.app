@@ -137,9 +137,9 @@ export default async function Home() {
           }
         />
         <Stat
-          label="Top 5 concentration"
-          value={`${net.top5Pct.toFixed(1)}%`}
-          sub="of total revenue"
+          label="Staked (total)"
+          value={fmtLink(data.totalStaked, 0)}
+          sub={`LINK · ${operators.filter((o) => o.staked).length} operators staking`}
         />
         <Stat
           label="Network MoM"
