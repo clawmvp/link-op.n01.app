@@ -20,6 +20,7 @@ import { resolveEns } from "../lib/ens";
 import { linkUsd } from "../lib/price";
 import { traceCold } from "../lib/trace";
 import { buildWarchestSeries } from "../lib/warchestBuild";
+import { buildStakingMap } from "../lib/staking";
 import { rpc } from "../lib/rpc";
 import { EXCLUDE } from "../lib/labels";
 import type { EventTuple, Snapshot } from "../lib/types";
@@ -98,6 +99,11 @@ async function main() {
   );
   console.log(`Warchest series for ${Object.keys(warchest).length} operators.`);
 
+  // Which cluster wallets stake, and where (Chainlink pools + stake.link).
+  console.log(`Discovering staking positions …`);
+  const staking = await buildStakingMap(clusters);
+  console.log(`Found staking positions for ${Object.keys(staking).length} operators.`);
+
   const snap: Snapshot = {
     generatedAt: Math.floor(Date.now() / 1000),
     fromBlock: Math.min(DEPLOY_BLOCK, SAFE_DEPLOY_BLOCK),
@@ -107,6 +113,7 @@ async function main() {
     events,
     cold,
     warchest,
+    staking,
   };
 
   const out = join(process.cwd(), "lib", "snapshot.json");

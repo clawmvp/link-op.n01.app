@@ -45,6 +45,9 @@ export type Snapshot = {
   // Warchest over time per operator: ascending [ym, combinedHeldWei] — the LINK
   // balance of the operator's cluster (main + cold wallets) at each month end.
   warchest?: Record<string, [string, string][]>;
+  // Which cluster wallets stake, and where: operator -> [wallet, sourceKey][]
+  // (sourceKey ∈ STAKING_SOURCES). Discovered offline; amounts are read live.
+  staking?: Record<string, [string, string][]>;
 };
 
 // One decoded EarmarkSet event.

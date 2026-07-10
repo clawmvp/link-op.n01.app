@@ -144,33 +144,41 @@ async function loadData(): Promise<DashboardData> {
     /* leave held unset */
   }
 
-  // LINK staked in official venues (Chainlink Staking pools + stake.link),
-  // queried across each operator's cluster wallets (main + cold). Separate,
-  // best-effort pass so a staking RPC hiccup never affects held. No cap: a
-  // position read directly from a cluster wallet is unambiguously the operator's.
+  // LINK staked in official venues (Chainlink Staking pools + stake.link). The
+  // snapshot already lists which cluster wallets stake and where (built offline
+  // in refresh), so at runtime we only re-query that small wallet set for fresh
+  // amounts. Best-effort, its own pass; no cap — a position read from a cluster
+  // wallet is unambiguously the operator's.
+  const stakingMap = (BASE.staking ?? {}) as Record<string, [string, string][]>;
   let totalStaked = 0n;
   try {
-    const clusterOf = (o: Operator) => [
-      o.address,
-      ...(cold[o.address] ?? []).map(([w]) => w),
-    ];
-    const staking = await fetchStaking(operators.flatMap(clusterOf));
-    for (const o of operators) {
-      const bySource: Record<string, bigint> = {};
-      for (const w of clusterOf(o)) {
-        const rec = staking[w];
-        if (!rec) continue;
-        for (const [key, amt] of Object.entries(rec)) {
-          bySource[key] = (bySource[key] ?? 0n) + BigInt(amt);
-        }
+    const walletOp = new Map<string, string>();
+    for (const [op, list] of Object.entries(stakingMap))
+      for (const [w] of list) walletOp.set(w, op);
+
+    if (walletOp.size) {
+      const staking = await fetchStaking([...walletOp.keys()]);
+      const byOp = new Map<string, Record<string, bigint>>();
+      for (const [w, rec] of Object.entries(staking)) {
+        const op = walletOp.get(w);
+        if (!op) continue;
+        const agg = byOp.get(op) ?? {};
+        for (const [key, amt] of Object.entries(rec))
+          agg[key] = (agg[key] ?? 0n) + BigInt(amt);
+        byOp.set(op, agg);
       }
-      const stakedBy = STAKING_SOURCES.filter((s) => bySource[s.key])
-        .map((s) => ({ source: s.key, amount: bySource[s.key].toString() }));
-      if (stakedBy.length) {
-        const sum = stakedBy.reduce((n, s) => n + BigInt(s.amount), 0n);
-        o.staked = sum.toString();
-        o.stakedBy = stakedBy;
-        totalStaked += sum;
+      for (const o of operators) {
+        const bySource = byOp.get(o.address);
+        if (!bySource) continue;
+        const stakedBy = STAKING_SOURCES.filter((s) => bySource[s.key]).map(
+          (s) => ({ source: s.key, amount: bySource[s.key].toString() }),
+        );
+        if (stakedBy.length) {
+          const sum = stakedBy.reduce((n, s) => n + BigInt(s.amount), 0n);
+          o.staked = sum.toString();
+          o.stakedBy = stakedBy;
+          totalStaked += sum;
+        }
       }
     }
   } catch {

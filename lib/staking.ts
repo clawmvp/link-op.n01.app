@@ -95,3 +95,25 @@ export async function fetchStaking(
   );
   return out;
 }
+
+// Offline (refresh-time) discovery of which cluster wallets stake, and where.
+// Returns operator -> [wallet, sourceKey][] for every non-zero position. Stored
+// in the snapshot so the runtime only has to re-query this small wallet set for
+// fresh amounts instead of scanning every cluster wallet.
+export async function buildStakingMap(
+  clusters: Record<string, string[]>,
+): Promise<Record<string, [string, string][]>> {
+  const wallets = [...new Set(Object.values(clusters).flat().map((w) => w.toLowerCase()))];
+  const staking = await fetchStaking(wallets);
+  const out: Record<string, [string, string][]> = {};
+  for (const [op, ws] of Object.entries(clusters)) {
+    const entries: [string, string][] = [];
+    for (const w of ws) {
+      const rec = staking[w.toLowerCase()];
+      if (!rec) continue;
+      for (const key of Object.keys(rec)) entries.push([w.toLowerCase(), key]);
+    }
+    if (entries.length) out[op.toLowerCase()] = entries;
+  }
+  return out;
+}
