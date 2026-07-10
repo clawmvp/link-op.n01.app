@@ -68,6 +68,17 @@ export default async function OperatorPage({
   const retPct = retentionPct(held, operator.totalLink);
   const warchestSeries = getWarchestSeries(operator.address);
 
+  const forecast = data.forecasts[operator.address];
+  const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const fmtDate = (ts: number) => {
+    const d = new Date(ts * 1000);
+    const mon = [
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ][d.getUTCMonth()];
+    return `${WD[d.getUTCDay()]} ${mon} ${d.getUTCDate()}`;
+  };
+
   const staked = operator.staked;
   const stakedBy = operator.stakedBy ?? [];
   // Everything the operator still controls: wallet-held + staked positions.
@@ -207,6 +218,57 @@ export default async function OperatorPage({
           }
         />
       </section>
+
+      {/* Upcoming payments — forecast from the weekly earmark cadence */}
+      {forecast && forecast.upcoming.length > 0 && (
+        <section className="mb-6 rounded-xl border border-sky-500/25 bg-sky-500/[0.06] px-5 py-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="text-xs uppercase tracking-wider text-sky-300/80">
+              Upcoming payments · next 30 days (est.)
+            </div>
+            <div className="text-[11px] text-ink-500">
+              ~{fmtLink(forecast.weeklyAvg, 0)} LINK / week · {WD[forecast.weekday]}s
+              {" · "}avg of {forecast.sampleWeeks} wks
+            </div>
+          </div>
+
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-semibold tabular-nums text-ink-100">
+              ~{fmtLink(forecast.total, 0)}
+            </span>
+            <span className="text-sm text-ink-400">LINK expected</span>
+            {fmtUsd(forecast.total, linkUsd) && (
+              <span className="text-sm text-ink-500">
+                · {fmtUsd(forecast.total, linkUsd)}
+              </span>
+            )}
+          </div>
+
+          <ul className="mt-3 space-y-1">
+            {forecast.upcoming.map((p) => (
+              <li
+                key={p.ts}
+                className="flex items-center justify-between gap-3 text-sm"
+              >
+                <span className="text-ink-300">{fmtDate(p.ts)}</span>
+                <span className="tabular-nums text-ink-200">
+                  ~{fmtLink(p.amount, 0)} LINK
+                  <span className="ml-2 text-[11px] text-ink-500">
+                    {fmtLink(forecast.weeklyLow, 0)}–{fmtLink(forecast.weeklyHigh, 0)}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          <p className="mt-3 text-[11px] leading-relaxed text-ink-600">
+            {forecast.confident
+              ? "Earmark rewards land weekly; amounts projected from this operator's recent average (range = recent min–max). "
+              : "Timing looks irregular for this operator — treat as a rough estimate. "}
+            Direct treasury payouts are irregular and not scheduled here.
+          </p>
+        </section>
+      )}
 
       {/* Warchest — how much of what they earned is still in the wallet */}
       <section className="mb-6 rounded-xl border border-ink-800 bg-ink-900/60 px-5 py-4">

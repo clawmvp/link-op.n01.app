@@ -142,13 +142,9 @@ export default async function Home() {
           sub={`LINK · ${operators.filter((o) => o.staked).length} operators staking`}
         />
         <Stat
-          label="Network MoM"
-          value={
-            net.momPct == null
-              ? "—"
-              : `${net.momPct >= 0 ? "+" : ""}${net.momPct.toFixed(1)}%`
-          }
-          sub="last full month"
+          label="Expected inflow (30d)"
+          value={`~${fmtLink(data.totalExpected30, 0)}`}
+          sub={`LINK · ${Object.keys(data.forecasts).length} ops · weekly earmark est.`}
         />
       </section>
 

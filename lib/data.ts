@@ -14,6 +14,7 @@ import { resolveEns } from "./ens";
 import { linkUsd } from "./price";
 import { fetchLinkBalances } from "./balances";
 import { fetchStaking, STAKING_SOURCES } from "./staking";
+import { forecastPayments, type PaymentForecast } from "./forecast";
 import { EXCLUDE } from "./labels";
 import {
   monthlyByOperator,
@@ -43,6 +44,8 @@ export type DashboardData = {
   totalEvents: number;
   totalHeld: string; // combined current LINK held across active operators
   totalStaked: string; // combined LINK staked across active operators
+  forecasts: Record<string, PaymentForecast>; // next-30d earmark forecast per op
+  totalExpected30: string; // combined expected earmark inflow, next 30 days
 };
 
 // The committed snapshot is the baseline; at runtime we (a) refresh the LINK
@@ -90,6 +93,25 @@ async function loadData(): Promise<DashboardData> {
   const activeSet = new Set(operators.map((o) => o.address));
   const monthly = monthlyByOperator(events, activeSet);
   const monthlyTotals = sumMonthly(monthly);
+
+  // Forecast the next 30 days of (weekly) earmark payments per active operator,
+  // from their own recent cadence + average. Direct payouts are irregular and
+  // deliberately not scheduled here.
+  const eventsByOp = new Map<string, typeof events>();
+  for (const e of events) {
+    const arr = eventsByOp.get(e[0]);
+    if (arr) arr.push(e);
+    else eventsByOp.set(e[0], [e]);
+  }
+  const forecasts: Record<string, PaymentForecast> = {};
+  let expected30 = 0n;
+  for (const o of operators) {
+    const fc = forecastPayments(eventsByOp.get(o.address) ?? [], now, 30);
+    if (fc) {
+      forecasts[o.address] = fc;
+      expected30 += BigInt(fc.total);
+    }
+  }
 
   // Current LINK still held ("warchest"): the operator's main wallet plus any
   // traced cold-storage wallets (≤3 hops). A traced wallet is treated as the
@@ -200,10 +222,12 @@ async function loadData(): Promise<DashboardData> {
     totalEvents: operators.reduce((n, o) => n + o.earmarks, 0),
     totalHeld: totalHeld.toString(),
     totalStaked: totalStaked.toString(),
+    forecasts,
+    totalExpected30: expected30.toString(),
   };
 }
 
-export const getData = unstable_cache(loadData, ["earmark-data-v8"], {
+export const getData = unstable_cache(loadData, ["earmark-data-v9"], {
   revalidate: 1800,
 });
 
