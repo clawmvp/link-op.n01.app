@@ -227,7 +227,7 @@ async function loadData(): Promise<DashboardData> {
   };
 }
 
-export const getData = unstable_cache(loadData, ["earmark-data-v9"], {
+export const getData = unstable_cache(loadData, ["earmark-data-v10"], {
   revalidate: 1800,
 });
 

@@ -70,14 +70,19 @@ export default async function OperatorPage({
 
   const forecast = data.forecasts[operator.address];
   const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const MON = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
   const fmtDate = (ts: number) => {
     const d = new Date(ts * 1000);
-    const mon = [
-      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-    ][d.getUTCMonth()];
-    return `${WD[d.getUTCDay()]} ${mon} ${d.getUTCDate()}`;
+    return `${WD[d.getUTCDay()]} ${MON[d.getUTCMonth()]} ${d.getUTCDate()}`;
   };
+  // Current month (for the "until end of month" label) and its exclusive bound.
+  const nowD = new Date(data.generatedAt * 1000);
+  const thisMonthName = MON[nowD.getUTCMonth()];
+  const monthEndTs =
+    Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth() + 1, 1) / 1000;
 
   const staked = operator.staked;
   const stakedBy = operator.stakedBy ?? [];
@@ -224,7 +229,7 @@ export default async function OperatorPage({
         <section className="mb-6 rounded-xl border border-sky-500/25 bg-sky-500/[0.06] px-5 py-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div className="text-xs uppercase tracking-wider text-sky-300/80">
-              Upcoming payments · next 30 days (est.)
+              Upcoming payments (est.)
             </div>
             <div className="text-[11px] text-ink-500">
               ~{fmtLink(forecast.weeklyAvg, 0)} LINK / week · {WD[forecast.weekday]}s
@@ -232,33 +237,58 @@ export default async function OperatorPage({
             </div>
           </div>
 
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-semibold tabular-nums text-ink-100">
-              ~{fmtLink(forecast.total, 0)}
-            </span>
-            <span className="text-sm text-ink-400">LINK expected</span>
-            {fmtUsd(forecast.total, linkUsd) && (
-              <span className="text-sm text-ink-500">
-                · {fmtUsd(forecast.total, linkUsd)}
-              </span>
-            )}
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            <div className="rounded-lg bg-ink-900/60 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-ink-500">
+                By end of {thisMonthName} · {forecast.eomCount} pay
+                {forecast.eomCount === 1 ? "" : "ts"}
+              </div>
+              <div className="mt-0.5 text-xl font-semibold tabular-nums text-ink-100">
+                ~{fmtLink(forecast.eomTotal, 0)}
+              </div>
+              <div className="text-[11px] text-ink-500">
+                LINK{fmtUsd(forecast.eomTotal, linkUsd) ? ` · ${fmtUsd(forecast.eomTotal, linkUsd)}` : ""}
+              </div>
+            </div>
+            <div className="rounded-lg bg-ink-900/60 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-ink-500">
+                Next 30 days · {forecast.upcoming.filter((p) => p.ts <= data.generatedAt + 30 * 86400).length} payts
+              </div>
+              <div className="mt-0.5 text-xl font-semibold tabular-nums text-ink-100">
+                ~{fmtLink(forecast.total, 0)}
+              </div>
+              <div className="text-[11px] text-ink-500">
+                LINK{fmtUsd(forecast.total, linkUsd) ? ` · ${fmtUsd(forecast.total, linkUsd)}` : ""}
+              </div>
+            </div>
           </div>
 
           <ul className="mt-3 space-y-1">
-            {forecast.upcoming.map((p) => (
-              <li
-                key={p.ts}
-                className="flex items-center justify-between gap-3 text-sm"
-              >
-                <span className="text-ink-300">{fmtDate(p.ts)}</span>
-                <span className="tabular-nums text-ink-200">
-                  ~{fmtLink(p.amount, 0)} LINK
-                  <span className="ml-2 text-[11px] text-ink-500">
-                    {fmtLink(forecast.weeklyLow, 0)}–{fmtLink(forecast.weeklyHigh, 0)}
-                  </span>
-                </span>
-              </li>
-            ))}
+            {forecast.upcoming.map((p, i) => {
+              const crosses =
+                p.ts >= monthEndTs &&
+                (i === 0 || forecast.upcoming[i - 1].ts < monthEndTs);
+              return (
+                <li key={p.ts}>
+                  {crosses && (
+                    <div className="my-1 flex items-center gap-2 text-[10px] uppercase tracking-wider text-ink-600">
+                      <span className="h-px flex-1 bg-ink-800" />
+                      next month
+                      <span className="h-px flex-1 bg-ink-800" />
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-ink-300">{fmtDate(p.ts)}</span>
+                    <span className="tabular-nums text-ink-200">
+                      ~{fmtLink(p.amount, 0)} LINK
+                      <span className="ml-2 text-[11px] text-ink-500">
+                        {fmtLink(forecast.weeklyLow, 0)}–{fmtLink(forecast.weeklyHigh, 0)}
+                      </span>
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
 
           <p className="mt-3 text-[11px] leading-relaxed text-ink-600">

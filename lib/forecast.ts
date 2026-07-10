@@ -11,13 +11,15 @@ export type ForecastPoint = { ts: number; amount: string }; // wei
 
 export type PaymentForecast = {
   weekday: number; // 0=Sun … most common earmark weekday (usually 2=Tue)
-  weeklyAvg: string; // wei — mean of recent complete weeks
+  weeklyAvg: string; // wei — recency-weighted mean of recent complete weeks
   weeklyLow: string; // wei — recent min
   weeklyHigh: string; // wei — recent max
   sampleWeeks: number; // how many complete weeks fed the average
-  upcoming: ForecastPoint[]; // scheduled payments within the horizon
-  total: string; // wei — sum of `upcoming`
+  upcoming: ForecastPoint[]; // scheduled payments within the 30-day horizon
+  total: string; // wei — sum of `upcoming` (next 30 days)
   horizonDays: number;
+  eomTotal: string; // wei — payments through the end of the current month
+  eomCount: number; // number of payments through end of month
   confident: boolean; // weekly rhythm + enough history
 };
 
@@ -59,9 +61,17 @@ export function forecastPayments(
     .sort(([a], [b]) => a - b);
   if (complete.length < 3) return null;
 
-  const recent = complete.slice(-8).map(([, v]) => v);
-  const sum = recent.reduce((a, v) => a + v, 0n);
-  const weeklyAvg = sum / BigInt(recent.length);
+  // Recency-weighted average over the last 6 complete weeks: newer weeks weigh
+  // more (linear weights 1..n), so the estimate tracks the recent trend and
+  // old one-off spikes (catch-up double-posts) fade out.
+  const recent = complete.slice(-6).map(([, v]) => v);
+  const n = recent.length;
+  const wtot = BigInt((n * (n + 1)) / 2); // Σ weights 1..n
+  let wsum = 0n;
+  recent.forEach((v, i) => {
+    wsum += v * BigInt(i + 1);
+  });
+  const weeklyAvg = wsum / wtot;
   const weeklyLow = recent.reduce((m, v) => (v < m ? v : m), recent[0]);
   const weeklyHigh = recent.reduce((m, v) => (v > m ? v : m), recent[0]);
 
@@ -75,14 +85,27 @@ export function forecastPayments(
   // stay in phase and skip a week that already paid.
   const lastTs = earmarks[earmarks.length - 1][2];
   const horizonEnd = now + horizonDays * 86400;
+  // Exclusive upper bound = 00:00 UTC on the 1st of next month.
+  const d = new Date(now * 1000);
+  const monthEnd = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1) / 1000;
+  const listEnd = Math.max(horizonEnd, monthEnd);
+
+  // All scheduled payments up to the later of the two horizons; the two totals
+  // are derived from this single list.
   const upcoming: ForecastPoint[] = [];
-  for (let k = 1; k <= Math.ceil(horizonDays / 7) + 1; k++) {
+  let total = 0n;
+  let eomTotal = 0n;
+  let eomCount = 0;
+  for (let k = 1; k <= Math.ceil((listEnd - now) / WEEK) + 1; k++) {
     const ts = lastTs + k * WEEK;
-    if (ts > now && ts <= horizonEnd) {
-      upcoming.push({ ts, amount: weeklyAvg.toString() });
+    if (ts <= now || ts > listEnd) continue;
+    upcoming.push({ ts, amount: weeklyAvg.toString() });
+    if (ts <= horizonEnd) total += weeklyAvg;
+    if (ts < monthEnd) {
+      eomTotal += weeklyAvg;
+      eomCount++;
     }
   }
-  const total = (weeklyAvg * BigInt(upcoming.length)).toString();
 
   return {
     weekday,
@@ -91,8 +114,10 @@ export function forecastPayments(
     weeklyHigh: weeklyHigh.toString(),
     sampleWeeks: recent.length,
     upcoming,
-    total,
+    total: total.toString(),
     horizonDays,
+    eomTotal: eomTotal.toString(),
+    eomCount,
     confident,
   };
 }
