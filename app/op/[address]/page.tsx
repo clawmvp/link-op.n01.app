@@ -321,11 +321,13 @@ export default async function OperatorPage({
 
         <p className="mt-3 text-[11px] leading-relaxed text-ink-600">
           Current LINK balance of the main wallet plus any self-custody wallets we
-          could trace within 3 hops (each capped to what this operator actually
-          sent there). The chart reconstructs the cluster&rsquo;s LINK balance
-          month by month from on-chain transfers. Can exceed 100% if wallets hold
-          LINK from other sources; cold-storage attribution is heuristic — treat
-          as a directional &ldquo;kept vs. moved&rdquo; signal, not exact savings.
+          could trace within 3 hops — counted in full, so it includes LINK the
+          operator added from their own sources (bought, other income), not only
+          what flowed from revenue. The chart reconstructs the cluster&rsquo;s
+          LINK balance month by month from on-chain transfers. Cold-storage
+          attribution is heuristic: a traced wallet may also hold unrelated LINK,
+          so treat this as a directional &ldquo;kept vs. moved&rdquo; signal, not
+          exact savings.
         </p>
       </section>
 

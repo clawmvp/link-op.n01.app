@@ -92,9 +92,11 @@ async function loadData(): Promise<DashboardData> {
   const monthlyTotals = sumMonthly(monthly);
 
   // Current LINK still held ("warchest"): the operator's main wallet plus any
-  // traced cold-storage wallets (≤3 hops). Each cold wallet's contribution is
-  // capped to what the operator's cluster actually sent it, so we never count a
-  // third party's balance. Best-effort: RPC failures just mean no held value.
+  // traced cold-storage wallets (≤3 hops). A traced wallet is treated as the
+  // operator's own, so its FULL LINK balance counts — including LINK from their
+  // own sources (bought, other income), not just what flowed from revenue.
+  // (Ownership is decided at trace time by the discovery guardrails.)
+  // Best-effort: RPC failures just mean no held value.
   const cold = (BASE.cold ?? {}) as Record<
     string,
     [string, string, string, number][]
@@ -116,8 +118,9 @@ async function loadData(): Promise<DashboardData> {
       for (const [w, inflowWei, parent, hop] of list) {
         const bal = balances[w];
         if (bal == null) continue;
-        // count min(current balance, LINK the cluster sent here)
-        const counted = BigInt(bal) < BigInt(inflowWei) ? BigInt(bal) : BigInt(inflowWei);
+        // Full balance — the traced wallet is the operator's, so all of its LINK
+        // is their warchest (incl. own-source top-ups beyond traced inflow).
+        const counted = BigInt(bal);
         coldSum += counted;
         // Keep even zero-balance wallets: they're pass-through hops that the
         // flow diagram needs to connect the chain (main → … → held wallet).
@@ -129,10 +132,6 @@ async function loadData(): Promise<DashboardData> {
           hop,
         });
       }
-      // Safety cap: cold-storage savings can't exceed tracked revenue. Prevents
-      // any residual over-attribution from inflating an operator's held.
-      const revCap = BigInt(o.totalLink);
-      if (coldSum > revCap) coldSum = revCap;
       if (coldSum > 0n) {
         o.coldHeld = coldSum.toString();
         o.cold = perWallet.sort((a, b) => (BigInt(a.held) < BigInt(b.held) ? 1 : -1));
@@ -204,7 +203,7 @@ async function loadData(): Promise<DashboardData> {
   };
 }
 
-export const getData = unstable_cache(loadData, ["earmark-data-v7"], {
+export const getData = unstable_cache(loadData, ["earmark-data-v8"], {
   revalidate: 1800,
 });
 
